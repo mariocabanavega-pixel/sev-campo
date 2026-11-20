@@ -1557,6 +1557,10 @@ function autoRumbos(lin,forzar){if(!lin)return 0;const sevs=S.sondeos.filter(s=>
 const halfAB=s=>{const d=datosInv(s);return d.length?Math.max(...d.map(o=>o.ab)):50};
 /* ---- imagen satelital (Esri World Imagery, con los SEV marcados) ---- */
 const SAT_BASE='https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export';
+const TILE_BASE='https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile';
+function lonToGX(lon,z){return (lon+180)/360*Math.pow(2,z)*256}
+function latToGY(lat,z){const s=Math.sin(lat*RAD);return (0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*Math.pow(2,z)*256}
+function zoomSat(bb){for(let z=19;z>=1;z--){const w=lonToGX(bb[2],z)-lonToGX(bb[0],z),h=latToGY(bb[1],z)-latToGY(bb[3],z);if(Math.max(w,h)<=1280)return z}return 1}
 function bboxLinea(sevs){const c=sevs.filter(tieneXY);if(!c.length)return null;
   let la0=Math.min(...c.map(s=>+s.lat)),la1=Math.max(...c.map(s=>+s.lat)),lo0=Math.min(...c.map(s=>+s.lon)),lo1=Math.max(...c.map(s=>+s.lon));
   for(const s of c){if(s.rumbo==null)continue;const h=halfAB(s),dLat=h*Math.cos(s.rumbo*RAD)/110540,dLon=h*Math.sin(s.rumbo*RAD)/(111320*Math.cos(s.lat*RAD));
@@ -1573,16 +1577,23 @@ async function traerSatelite(E){const sevs=sevsDe(E).filter(tieneXY);
   if(sevs.length<1){toast('Primero pon las coordenadas de los sondeos (pestaña Sitio)');return}
   if(navigator.onLine===false){toast('Necesitas señal para traer la imagen satelital');return}
   autoRumbos(E.linea||'');
-  const bb=bboxLinea(sevs),latc=(bb[1]+bb[3])/2,aspect=((bb[2]-bb[0])*Math.cos(latc*RAD))/(bb[3]-bb[1]);
-  let w,h;const M=1280;if(aspect>=1){w=M;h=Math.max(300,Math.round(M/aspect))}else{h=M;w=Math.max(300,Math.round(M*aspect))}
+  const bb=bboxLinea(sevs);
   V.satCargando=true;render();
-  try{const r=await fetch(`${SAT_BASE}?bbox=${bb.join(',')}&bboxSR=4326&imageSR=4326&size=${w},${h}&format=jpg&f=image`);
-    if(!r.ok)throw new Error('http');const bl=await r.blob();
-    const url=await new Promise((ok,ko)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=ko;fr.readAsDataURL(bl)});
-    const img=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ko(new Error('img'));i.src=url});
-    const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.drawImage(img,0,0,w,h);
-    dibujarMarcas(g,w,h,marcasDeCoord(sevs,bb),sevsDe(E),true);
-    // marca de atribución Esri
+  try{
+    const z=zoomSat(bb),gx0=lonToGX(bb[0],z),gx1=lonToGX(bb[2],z),gyT=latToGY(bb[3],z),gyB=latToGY(bb[1],z);
+    const w=Math.max(1,Math.round(gx1-gx0)),h=Math.max(1,Math.round(gyB-gyT)),n=Math.pow(2,z);
+    const tx0=Math.floor(gx0/256),tx1=Math.floor((gx1-1)/256),ty0=Math.max(0,Math.floor(gyT/256)),ty1=Math.min(n-1,Math.floor((gyB-1)/256));
+    const carga=(tx,ty)=>new Promise(ok=>{const xx=((tx%n)+n)%n,im=new Image();im.crossOrigin='anonymous';im.onload=()=>ok({im,tx,ty});im.onerror=()=>ok(null);im.src=`${TILE_BASE}/${z}/${ty}/${xx}`});
+    const jobs=[];for(let tx=tx0;tx<=tx1;tx++)for(let ty=ty0;ty<=ty1;ty++)jobs.push(carga(tx,ty));
+    const tiles=await Promise.all(jobs);
+    const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
+    let nOk=0;for(const t of tiles){if(!t)continue;g.drawImage(t.im,Math.round(t.tx*256-gx0),Math.round(t.ty*256-gyT));nOk++}
+    if(!nOk)throw new Error('tiles');
+    const projN=(lon,lat)=>[(lonToGX(lon,z)-gx0)/w,(latToGY(lat,z)-gyT)/h];
+    const marcas=sevs.map(s=>{const c0=projN(+s.lon,+s.lat);if(s.rumbo==null)return{sid:s.id,p:[c0]};
+      const hh=halfAB(s),dLat=hh*Math.cos(s.rumbo*RAD)/110540,dLon=hh*Math.sin(s.rumbo*RAD)/(111320*Math.cos(s.lat*RAD));
+      return{sid:s.id,p:[projN(+s.lon-dLon,+s.lat-dLat),projN(+s.lon+dLon,+s.lat+dLat)]}});
+    dibujarMarcas(g,w,h,marcas,sevsDe(E),true);
     g.font=`${Math.round(w/90)}px sans-serif`;const at='Esri, Maxar, Earthstar Geographics';const tw=g.measureText(at).width;
     g.fillStyle='rgba(0,0,0,.45)';g.fillRect(w-tw-10,h-Math.round(w/55),tw+10,Math.round(w/55));g.fillStyle='#fff';g.fillText(at,w-tw-5,h-Math.round(w/180));
     const data=c.toDataURL('image/jpeg',0.85);

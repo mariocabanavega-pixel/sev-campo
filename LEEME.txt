@@ -1,0 +1,70 @@
+===========================================================
+  SEV CAMPO  —  cómo publicarlo e instalarlo como app
+===========================================================
+
+Esta carpeta ES la app completa. NO hay que tocar ni abrir los
+archivos; solo hay que SUBIR TODA LA CARPETA a una página web
+gratis. Una vez subida, queda con una dirección que empieza por
+https:// y ahí sí:
+  - se instala como app en el celular (con ícono),
+  - abre sin internet,
+  - y la imagen del satélite por fin funciona.
+
+Archivos que debe subir (todos, juntos):
+  index.html, sw.js, manifest.webmanifest, icon-192.png, icon-512.png
+
+Esto se hace MÁS FÁCIL desde un COMPUTADOR. Después abre el enlace
+en el celular para instalarla.
+
+-----------------------------------------------------------
+  OPCIÓN A  —  La más rápida (Netlify, ~2 minutos)
+-----------------------------------------------------------
+1. En el computador, descomprime este .zip (queda la carpeta
+   "SEV_Campo_app").
+2. Entra a:  https://app.netlify.com/drop
+3. Arrastra la CARPETA "SEV_Campo_app" completa y suéltala en
+   el recuadro de esa página.
+4. En unos segundos te da una dirección tipo:
+   https://algo-algo-123.netlify.app
+   Esa es tu app. ¡Listo!
+   (Para que no se borre y tener una dirección más bonita, crea
+   una cuenta gratis con tu correo cuando te lo ofrezca.)
+
+-----------------------------------------------------------
+  OPCIÓN B  —  Permanente y gratis para siempre (GitHub Pages)
+-----------------------------------------------------------
+1. Crea una cuenta gratis en https://github.com (no piden tarjeta).
+2. Arriba a la derecha, el signo "+"  ->  "New repository".
+3. Nombre: sev-campo   ->  marca "Public"  ->  "Create repository".
+4. En la página del repositorio: "uploading an existing file".
+5. Arrastra los 5 archivos de esta carpeta (index.html, sw.js,
+   manifest.webmanifest, icon-192.png, icon-512.png)  ->  "Commit".
+6. Arriba, pestaña "Settings"  ->  menú izquierdo "Pages".
+7. En "Branch" elige "main" y carpeta "/ (root)"  ->  "Save".
+8. Espera 1–2 minutos y recarga: aparece tu dirección, tipo:
+   https://TUUSUARIO.github.io/sev-campo/
+   Esa es tu app, permanente.
+
+-----------------------------------------------------------
+  INSTALARLA EN EL CELULAR (con cualquiera de las dos opciones)
+-----------------------------------------------------------
+1. Abre la dirección https:// en Chrome del CELULAR.
+2. Menú de Chrome (los 3 puntos arriba) -> "Instalar aplicación"
+   o "Agregar a pantalla de inicio".
+3. Queda el ícono de SEV Campo en el celular, como una app normal.
+4. Desde ese ícono abre aunque no tengas internet.
+
+OJO: la PRIMERA vez ábrela CON internet (para que se guarde y
+para bajar el satélite/geología de tus sitios). Después ya
+funciona sin señal en el campo.
+
+-----------------------------------------------------------
+  CUANDO TE MANDE UNA VERSIÓN NUEVA DE LA APP
+-----------------------------------------------------------
+Solo reemplaza el "index.html" por el nuevo en el mismo sitio
+(en GitHub: "Add file -> Upload files" y subes el nuevo index.html;
+en Netlify: arrastras la carpeta otra vez). La app en tu celular
+se actualiza sola la próxima vez que la abras con internet.
+
+Tus datos (sondeos, estudios) NO se borran al actualizar: quedan
+guardados en el celular.

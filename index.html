@@ -1593,15 +1593,18 @@ async function traerSatelite(E){const sevs=sevsDe(E).filter(tieneXY);
     const marcas=sevs.map(s=>{const c0=projN(+s.lon,+s.lat);if(s.rumbo==null)return{sid:s.id,p:[c0]};
       const hh=halfAB(s),dLat=hh*Math.cos(s.rumbo*RAD)/110540,dLon=hh*Math.sin(s.rumbo*RAD)/(111320*Math.cos(s.lat*RAD));
       return{sid:s.id,p:[projN(+s.lon-dLon,+s.lat-dLat),projN(+s.lon+dLon,+s.lat+dLat)]}});
-    dibujarMarcas(g,w,h,marcas,sevsDe(E),true);
     g.font=`${Math.round(w/90)}px sans-serif`;const at='Esri, Maxar, Earthstar Geographics';const tw=g.measureText(at).width;
     g.fillStyle='rgba(0,0,0,.45)';g.fillRect(w-tw-10,h-Math.round(w/55),tw+10,Math.round(w/55));g.fillStyle='#fff';g.fillText(at,w-tw-5,h-Math.round(w/180));
-    const data=c.toDataURL('image/jpeg',0.85);
+    const dataLimpia=c.toDataURL('image/jpeg',0.85);
+    dibujarMarcas(g,w,h,marcas,sevsDe(E),true);
+    const dataMarcada=c.toDataURL('image/jpeg',0.85);
     for(const f of E.fotos.filter(f=>f.autoSat))FDB.del(f.id);
     E.fotos=E.fotos.filter(f=>!f.autoSat);
-    const id=uid();await FDB.put(id,{data});FOTO_URL[id]=data;
-    E.fotos.push({id,cat:'sat',autoSat:true,desc:'Imagen satelital con la ubicación de los sondeos y el trazo aproximado de sus líneas. Fuente: Esri World Imagery.',w,h,fecha:new Date().toLocaleString('es-CO')});
-    saveNow();V.satCargando=false;render();toast('Imagen satelital lista, con los SEV marcados')}
+    const idL=uid();await FDB.put(idL,{data:dataLimpia});FOTO_URL[idL]=dataLimpia;
+    const idM=uid();await FDB.put(idM,{data:dataMarcada});FOTO_URL[idM]=dataMarcada;
+    E.fotos.push({id:idL,cat:'sat',autoSat:true,limpia:true,desc:'Vista satelital del sitio. Fuente: Esri World Imagery.',w,h,fecha:new Date().toLocaleString('es-CO')});
+    E.fotos.push({id:idM,cat:'sat',autoSat:true,desc:'Imagen satelital con la ubicación de los sondeos y el trazo aproximado de sus líneas. Fuente: Esri World Imagery.',w,h,fecha:new Date().toLocaleString('es-CO')});
+    saveNow();V.satCargando=false;render();toast('Imagen satelital lista: una vista limpia (arriba) y otra con los SEV marcados (croquis)')}
   catch(e){V.satCargando=false;render();toast('No se pudo traer la imagen satelital. Revisa la señal e intenta otra vez.')}}
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const E=estActual();if(!E)return;
   if(t.dataset.a==='satAuto'){traerSatelite(E);return}
@@ -1971,7 +1974,7 @@ async function informePDF(s,prog=()=>{},opt={}){
     P.text(40,174,'Sondeos eléctricos verticales (SEV) para exploración de agua subterránea',11.5,{color:GRIS});
     y=205;for(const l of envolver(EST.titulo,19,515)){P.text(40,y+16,l,19,{bold:true,color:VERDE});y+=24}
     if(EST.sitio){P.text(40,y+14,EST.sitio,11);y+=20}
-    y+=14;const sat=fot('sat')[0];if(sat){const r=Math.min(515/sat.im.w,300/sat.im.h),w=sat.im.w*r,h=sat.im.h*r;P.image(sat.im,40+(515-w)/2,y,w,h);P.rect(40+(515-w)/2,y,w,h,{stroke:'#B9C4BF',w:0.5})}
+    y+=14;const sat=fot('sat').find(f=>f.limpia)||fot('sat')[0];if(sat){const r=Math.min(515/sat.im.w,300/sat.im.h),w=sat.im.w*r,h=sat.im.h*r;P.image(sat.im,40+(515-w)/2,y,w,h);P.rect(40+(515-w)/2,y,w,h,{stroke:'#B9C4BF',w:0.5})}
     let yy=650;for(const [k,v] of [['Cliente',EST.cliente],['Elaboró',[EST.elaboro,EST.cargo].filter(Boolean).join(' – ')],['Empresa',EST.empresa],['Sondeos',EST.sevs.map(x=>x.nombre).join(', ')],['Fecha del trabajo de campo',fechaLarga(EST.fecha)],['Fecha del informe',fechaLarga(today())+(EST.ciudad?' · '+EST.ciudad:'')]]){
       if(!v)continue;P.text(40,yy,k,9,{color:GRIS});const ls=envolver(v,10,360);ls.forEach((l,i)=>P.text(190,yy+i*13,l,10,{bold:i===0&&k==='Cliente'}));yy+=13*ls.length+5}
     /* capítulos */
@@ -1983,8 +1986,7 @@ async function informePDF(s,prog=()=>{},opt={}){
     const cXY=conXY.length?[{t:'Latitud',w:95},{t:'Longitud',w:95}]:[];
     tabla([{t:'SEV',w:conXY.length?120:250,al:'left'},...cXY,{t:'AB/2 máx.\n(m)',w:60},{t:'Rumbo AB\n(°)',w:55},{t:'Arreglo',w:conXY.length?90:150,al:'left'}],
       EST.sevs.map(x=>{const dd=datosInv(x),am=dd.length?Math.max(...dd.map(o=>o.ab)):null;return[x.nombre,...(conXY.length?[xyOK(x)?gms(x.lat,'N','S'):'—',xyOK(x)?gms(x.lon,'E','O'):'—']:[]),am==null?'—':fmtg(am),x.rumbo==null?'—':fmt(x.rumbo,0),typeof esSemi==='function'&&esSemi(x)?'Semi-Schlumberger':'Schlumberger']}),{zebra:true});
-    if(conXY.length){subt('Croquis de ubicación de los sondeos');croquis(conXY)}
-    for(const f of fot('sat'))imagen(f,515,330,'Figura');
+    if(conXY.length){subt('Croquis de ubicación de los sondeos');const satM=fot('sat').find(f=>!f.limpia)||fot('sat')[0];if(satM)imagen(satM,515,360,'Figura');else croquis(conXY)}
     {const P=(EST.pozos||[]).filter(p=>p.ubic||p.prof||p.caudal||p.calidad);if(P.length){seccion('Pozos vecinos');
       parrafo('Pozos existentes cerca del sitio, referidos por la comunidad. Son la mejor referencia de lo que se puede esperar.',{sz:9,extra:5});
       tabla([{t:'Ubicación',w:175,al:'left'},{t:'Prof.\n(m)',w:60},{t:'Nivel\n(m)',w:60},{t:'Caudal',w:105,al:'left'},{t:'Calidad',w:110,al:'left'}],

@@ -385,6 +385,7 @@ function vLista(){
         <button class="btn sm" data-a="moverS" data-id="${s.id}" data-d="1" ${k===S.sondeos.length-1?'disabled':''} aria-label="Bajar">↓</button>
         <button class="btn sm" data-a="editarS" data-id="${s.id}">Editar</button>
         <button class="btn sm" data-a="duplicarS" data-id="${s.id}">Duplicar</button>
+        <button class="btn sm" data-a="copiarS" data-id="${s.id}">📦 Copiar</button>
         <button class="btn sm danger" data-a="borrarS" data-id="${s.id}">Borrar</button></div></div>`;
     return `<button class="item" data-a="abrir" data-id="${s.id}"><div class="main"><b>${esc(s.nombre)}</b> ${s.ejemplo?'<span class="chip ej">Ejemplo</span>':''}${s.modelo?' <span class="chip emp">'+s.modelo.rho.length+' capas</span>':''}
     <div class="meta">${esc(s.lugar||'Sin lugar')} · ${esc(s.fecha||'')}</div></div>
@@ -1967,7 +1968,7 @@ async function informePDF(s,prog=()=>{},opt={}){
     const lineas=t=>String(t||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
     /* portada */
     nueva();P.rect(0,0,595,10,{fill:VERDE});
-    if(EST.logoImg){const lw=Math.min(150,EST.logoImg.w),lh=lw*EST.logoImg.h/EST.logoImg.w;P.image(EST.logoImg,555-lw,38,lw,lh)}
+    if(EST.logoImg){const r=Math.min(205/EST.logoImg.w,105/EST.logoImg.h),lw=EST.logoImg.w*r,lh=EST.logoImg.h*r;P.image(EST.logoImg,555-lw,34,lw,lh)}
     if(EST.empresa)P.text(40,70,EST.empresa.toUpperCase(),15,{bold:true,color:VERDE});
     {let cy=90;for(const v of [EST.nit?'NIT '+EST.nit:'',EST.direccion,EST.web].filter(Boolean)){P.text(40,cy,v,9,{color:GRIS});cy+=12}}
     P.text(40,150,'ESTUDIO GEOELÉCTRICO',26,{bold:true});
@@ -1982,8 +1983,6 @@ async function informePDF(s,prog=()=>{},opt={}){
     seccion('Introducción y objetivo');for(const l of lineas(EST.intro))parrafo(l,{sz:9.5,extra:5});
     seccion('Localización');
     const conXY=EST.sevs.filter(xyOK);
-    const satL=fot('sat').find(f=>f.limpia);
-    if(satL)imagen(satL,515,300,'Figura');
     parrafo(`El estudio se hizo en ${EST.titulo}${EST.sitio?', '+EST.sitio:''}. La tabla muestra los sondeos${conXY.length?', con las coordenadas del centro (estaca entre M y N) tomadas con el GPS del celular':''}.`,{sz:9.5,extra:6});
     const cXY=conXY.length?[{t:'Latitud',w:95},{t:'Longitud',w:95}]:[];
     tabla([{t:'SEV',w:conXY.length?120:250,al:'left'},...cXY,{t:'AB/2 máx.\n(m)',w:60},{t:'Rumbo AB\n(°)',w:55},{t:'Arreglo',w:conXY.length?90:150,al:'left'}],
@@ -2370,6 +2369,7 @@ document.addEventListener('click',e=>{
     case 'moverS':{const k=S.sondeos.findIndex(x=>x.id===t.dataset.id),j=k+(+t.dataset.d);if(j>=0&&j<S.sondeos.length){[S.sondeos[k],S.sondeos[j]]=[S.sondeos[j],S.sondeos[k]];saveNow();render()}break}
     case 'editarS':go({view:'editar',nuevo:false,sid:t.dataset.id,volverLista:true});break;
     case 'duplicarS':{const o=S.sondeos.find(x=>x.id===t.dataset.id);const c=clone(o);c.id=uid();c.nombre=o.nombre+' (copia)';c.ejemplo=false;S.sondeos.splice(S.sondeos.indexOf(o)+1,0,c);saveNow();render();toast('Sondeo duplicado');break}
+    case 'copiarS':{const o=S.sondeos.find(x=>x.id===t.dataset.id);if(o){const nm='SEV_'+String(o.nombre||'sondeo').replace(/[^\w\-]+/g,'_')+'_'+today()+'.json';guardarArchivo(nm,'application/json',JSON.stringify({app:'SEV Campo',v:3,fecha:new Date().toISOString(),sondeos:[clone(o)],zonas:[]},null,1),'json');toast('Sondeo copiado a un archivo. Guárdalo o cárgalo con Importar.')}break}
     case 'borrarS':{const o=S.sondeos.find(x=>x.id===t.dataset.id);confirmar(`¿Borrar el sondeo "${o.nombre}" con todas sus medidas y capas? No se puede deshacer.`,'Borrar sondeo',()=>{S.sondeos=S.sondeos.filter(x=>x.id!==o.id);saveNow();render();toast('Sondeo borrado')});break}
     case 'pt':{const idx=+t.dataset.i,f=s.filas[idx],el=$('#pt');if(el)el.innerHTML=`<b>Medida ${idx+1}:</b> AB/2 = ${fmtg(f.ab)} m · MN = ${fmtg(f.mn)} m · ρa = <b>${fmt(rho(s,f))} Ω·m</b>${f.off?' <span class="chip" style="background:var(--line);color:var(--muted)">sin usar</span>':''} <button class="btn sm ${f.off?'':'danger'}" data-a="toggleOff" data-i="${idx}" style="margin-left:4px;min-height:0;padding:4px 10px">${f.off?'Volver a usar':'No usar'}</button>`;break}
     case 'toggleOff':{const f=s&&s.filas[+t.dataset.i];if(f){f.off=!f.off;saveNow();render();toast(f.off?'Punto apagado. Vuelve a Capas y toca Automático para afinar el modelo.':'Punto activado otra vez. Recalcula las capas (Automático).')}break}

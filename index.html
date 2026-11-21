@@ -1452,12 +1452,14 @@ async function buscarGeoSGC(s){if(!tieneXY(s)){toast('Primero pon las coordenada
 function cardGeoSGC(s){if(!tieneXY(s))return '';const g=s.geoSGC,cargando=V.sgcCargando===s.id;
   return `<section class="card" style="display:flex;flex-direction:column;gap:8px"><b>🌐 Geología oficial del SGC en este punto</b>
    <p class="small muted" style="margin:0">Con señal, trae del Servicio Geológico la unidad exacta de estas coordenadas y su mapa. Hazlo en la casa antes de viajar: queda guardado para el informe.</p>
-   <button class="btn ${g?'':'primary'}" data-a="sgcBuscar" ${cargando?'disabled':''}>${cargando?'Consultando al SGC…':(g?'Actualizar desde el SGC':'🌐 Traer geología del SGC')}</button>
+   <button class="btn ${g?'':'primary'}" data-a="sgcBuscar" ${cargando?'disabled':''}>${cargando?'Consultando al SGC…':(g?'🔄 Actualizar datos del sitio (con internet)':'🌐 Traer geología del SGC (con internet)')}</button>
    ${g?`<div class="small" style="display:flex;flex-direction:column;gap:3px">
      ${g.sym?`<div><b>Unidad:</b> ${esc(g.sym)}${g.form?' — '+esc(g.form):''}</div>`:'<div class="muted">El SGC no reporta unidad en el punto exacto (puede ser mar, depósito reciente sin símbolo, o fuera del mapa).</div>'}
      ${g.desc?`<div><b>Roca:</b> ${esc(g.desc)}</div>`:''}
      ${g.edad?`<div><b>Edad:</b> ${esc(g.edad)}</div>`:''}
      ${g.muni?`<div><b>Municipio:</b> ${esc(g.muni)}</div>`:''}
+     ${(()=>{const h=hidroSitio(g);return h?`<div><b>Agua según la roca:</b> ${esc(h.n)}. Potencial: ${esc(h.niv)}.</div>`:'<div class="muted">No pude clasificar la roca para estimar el agua; el informe usará solo el contexto regional.</div>'})()}
+     <div class="muted">Guardado en este equipo: el informe lo usa aunque no tengas internet.</div>
      <div class="muted">Fuente: SGC, Mapa Geológico de Colombia 2015. Consultado ${esc(g.fecha||'')}.</div></div>
     ${g.img?`<img src="${g.img}" alt="Mapa SGC" style="width:100%;border-radius:8px;border:1px solid var(--line,#dde3df)"><div class="small muted">Recorte del mapa del SGC centrado en el punto. El sondeo está en el centro.</div>`
       :`<div class="note info small">Guardé los datos de la unidad. El mapa no se pudo guardar en este navegador; para verlo abre: <a href="${sgcMapaURL(+s.lat,+s.lon,1000,916)}" target="_blank" rel="noopener">mapa del SGC</a> (necesita señal). Si quieres el mapa en el informe, pídemelo y te lo dejo embebido.</div>`}
@@ -1466,6 +1468,35 @@ function cardGeoSGC(s){if(!tieneXY(s))return '';const g=s.geoSGC,cargando=V.sgcC
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const s=cur();if(!s)return;
   if(t.dataset.a==='sgcBuscar'){buscarGeoSGC(s);return}
   if(t.dataset.a==='sgcBorrar'){s.geoSGC=null;saveNow();render();return}});
+
+/* ---------- potencial de agua según la roca del punto (se calcula sin internet con lo que ya se guardó del SGC) ---------- */
+const HIDRO_CLASES={
+ costero:{n:'Depósitos costeros, de ciénaga o pantano',niv:'Variable, con riesgo de agua salobre o salada',tipo:'Acuífero libre, poco profundo, muchas veces con lentes de arena entre lodos.',cal:'Cerca de la costa o de ciénagas el agua suele ser salobre; la sobreexplotación puede traer agua de mar (intrusión salina).',sev:'Una resistividad muy baja puede ser arcilla o agua salada: confirma con la conductividad del agua medida en el sitio.'},
+ aluvial:{n:'Depósitos aluviales o de terraza (arenas, gravas y arcillas de río)',niv:'Medio a alto',tipo:'Acuífero libre a semiconfinado, de poca a mediana profundidad.',cal:'La calidad varía mucho. En el Caribe colombiano el agua de los aluviones puede tener bastante mineralización (el Estudio Nacional del Agua 2014 reporta de 200 a 2000 mg/L de sólidos disueltos según la zona) y salinizarse hacia la costa. Además es vulnerable a contaminación desde la superficie. Mide la conductividad del agua en el sitio.',sev:'Las capas de arena y grava saturadas se ven como resistividades intermedias; la arcilla baja el valor.'},
+ cuaternario:{n:'Depósitos cuaternarios recientes',niv:'Medio, heterogéneo',tipo:'Acuífero libre, de espesor y calidad variables.',cal:'Calidad variable; depende de cuánta arcilla y cuánta arena haya.',sev:'Conviene correlacionar varios SEV para ver la continuidad de las capas arenosas.'},
+ coluvial:{n:'Depósitos de ladera (coluviales) o abanicos',niv:'Bajo a medio',tipo:'Acuífero local, discontinuo, mezcla de bloques, arena y arcilla.',cal:'Calidad generalmente buena, pero con poco caudal y mucha variación de un punto a otro.',sev:'Los contrastes laterales fuertes son normales; interpreta cada SEV con cuidado.'},
+ clastica:{n:'Areniscas, conglomerados o arenas consolidadas',niv:'Medio a alto',tipo:'Acuífero libre o confinado; puede ser multicapa a mayor profundidad.',cal:'Calidad variable; en capas profundas puede aumentar la mineralización.',sev:'Las capas arenosas saturadas aparecen como zonas de resistividad media entre capas más conductoras de arcilla.'},
+ fina:{n:'Arcillolitas, lodolitas, limolitas o lutitas',niv:'Bajo',tipo:'Roca poco permeable (actúa como sello); solo da agua si hay fracturas o capas de arena intercaladas.',cal:'Agua poco abundante y, con frecuencia, más mineralizada.',sev:'Resistividades bajas y continuas indican arcilla; busca capas más resistivas que puedan ser arena.'},
+ carbonatada:{n:'Calizas o dolomitas',niv:'Variable (de bajo a muy alto)',tipo:'Acuífero fracturado o kárstico: el agua circula por fracturas y cavidades.',cal:'Agua dura (mucho calcio). Muy vulnerable a contaminación.',sev:'Los saltos bruscos de resistividad pueden indicar cavidades o fracturas.'},
+ cristalina:{n:'Rocas ígneas o metamórficas (granitos, gneis, esquistos)',niv:'Bajo',tipo:'Casi no hay agua en la roca sana: se encuentra en la capa meteorizada y en fracturas.',cal:'Calidad generalmente buena, con caudales bajos.',sev:'Busca zonas de menor resistividad que indiquen roca meteorizada o fracturada.'},
+ volcanica:{n:'Rocas volcánicas (basaltos, tobas, ignimbritas, cenizas)',niv:'Variable',tipo:'Acuífero fracturado; las tobas y cenizas pueden almacenar agua.',cal:'Calidad variable según el tipo de roca.',sev:'La fracturación domina: interpreta con cuidado.'}};
+function hidroSitio(g){if(!g)return null;
+  const tx=((g.desc||'')+' '+(g.form||'')+' '+(g.sym||'')+' '+(g.edad||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(!tx.trim())return null;
+  const t=r=>r.test(tx);let k=null;
+  const q=t(/cuaternario|holoceno|pleistoceno/)||/^q/i.test(g.sym||'');
+  if(t(/manglar|pantano|cienaga|intermareal|cordon litoral|llanura (de )?marea/)||(q&&t(/marino|playa|laguna|estuari|salin/)))k='costero';
+  else if(t(/aluvi|terraza|llanura de inundacion|fluvial|cauce|lacustre/))k='aluvial';
+  else if(t(/coluvi|abanico|derrubio|deslizamiento|talud/))k='coluvial';
+  else if(t(/granit|granodiorit|diorit|tonalit|gabro|sienit|gneis|esquist|filita|cuarcita|anfibolit|migmatit|metamorf|pizarra|serpentin|peridotit/))k='cristalina';
+  else if(t(/basalt|andesit|dacit|riolit|toba|ignimbrit|lava|volcan|piroclast|ceniza/))k='volcanica';
+  else if(t(/caliza|dolomit|calcare/))k='carbonatada';
+  else if(t(/areni|arena|conglomerad|grava|sabulit|arcillolit|lodolit|limolit|lutit|shale|arcill|lodo/)){
+    /* si hay roca arenosa y fina juntas, manda la que se nombra primero */
+    const ia=tx.search(/areni|arena|conglomerad|grava|sabulit/),ifi=tx.search(/arcillolit|lodolit|limolit|lutit|shale|arcill|lodo/);
+    k=(ia>=0&&(ifi<0||ia<=ifi))?'clastica':'fina'}
+  else if(t(/cuaternario|holoceno|pleistoceno/))k='cuaternario';
+  return k?Object.assign({k},HIDRO_CLASES[k]):null}
 
 /* ---------- objetivo, pozos vecinos, planeador de SEV y checklist de pasos ---------- */
 const USOS=['Casa / consumo humano','Riego / cultivo','Ganado / animales','Industria','Mixto','Otro'];
@@ -1768,6 +1799,7 @@ function tArchivos(s){
     <li><b>Importar medidas</b>: reemplaza las lecturas de este sondeo con las de un TXT o CSV.</li>
     <li>Al exportar se abre un cuadro con opciones: <b>Guardar como…</b> (PC, eliges carpeta y nombre), <b>Descargar</b> (queda en Descargas), <b>Compartir</b> (celular: WhatsApp, Drive, correo) o <b>Abrir en otra pestaña</b>.</li>
     <li>Si la app está abierta dentro de una <b>vista previa</b> (de Claude, WPS u otro visor), las descargas están bloqueadas: descarga <b>sev.html</b> y ábrelo con doble clic en Chrome, Edge o Firefox. En la app del celular (APK) el archivo se guarda directo en Descargas.</li></ul>`)}
+  ${tieneXY(s)&&!s.geoSGC?'<div class="note info small">Antes de sacar el PDF: ve a la pestaña <b>Sitio</b> y toca <b>Traer geología del SGC</b> (con internet). Así el informe trae el agua esperada según la roca de tu punto, y queda guardado para usarlo sin señal.</div>':''}
   ${enMarco?'<div class="note warn small">Estás en una vista previa que bloquea las descargas. Abre sev.html en Chrome, Edge o Firefox para guardar archivos.</div>':''}
   <section class="card" style="display:flex;flex-direction:column;gap:10px;border:2px solid var(--acc,#0B6E5F)"><b>📄 Informe completo del estudio</b>
     <div class="small">Para entregar al cliente: portada, localización con coordenadas e imagen satelital, geología, metodología, resultados de todos los SEV${s.linea?' de la línea "'+esc(s.linea)+'"':''}, correlación, <b>conclusiones y recomendaciones</b> sugeridas por la app, <b>fotos</b> tomadas con el celular y firma.</div>
@@ -1946,8 +1978,16 @@ async function informePDF(s,prog=()=>{},opt={}){
   /* ---------- ubicación y contexto ---------- */
   const bloqueUbic=titulo=>{const D=DEPTOS[s.depto],z=zonaDe(s),ar=num(s.ec)>0?archie(num(s.ec)):null;
     if(titulo)seccion(titulo);
+    const gSit=s.geoSGC||((typeof EST!=='undefined'&&EST&&EST.sevs)||[]).map(x=>x.geoSGC).find(Boolean),hs=hidroSitio(gSit);
+    if(hs){subt('Hidrogeología del sitio (según la roca en el punto)');
+      parrafo(`El Mapa Geológico de Colombia del SGC indica en el punto${gSit.sym?' la unidad '+gSit.sym:''}${gSit.form?' ('+gSit.form+')':''}${gSit.edad?', de edad '+gSit.edad:''}. Por su tipo de roca corresponde a: ${hs.n}.`,{sz:9,extra:3});
+      parrafo('Potencial para agua subterránea: '+hs.niv+'. '+hs.tipo,{sz:8.5,extra:1});
+      parrafo('Calidad y precauciones: '+hs.cal,{sz:8.5,extra:1});
+      parrafo('Lectura del SEV: '+hs.sev,{sz:8.5,extra:3});
+      parrafo(`Estimación general por tipo de roca (consulta al SGC del ${gSit.fecha||'—'}). No reemplaza un estudio hidrogeológico ni una prueba de bombeo.`,{sz:7.5,color:GRIS})}
+    else if(gSit===undefined&&tieneXY(s))parrafo('No se consultó el Servicio Geológico para este punto: se muestra solo el contexto regional del departamento.',{sz:8,color:GRIS});
     if(D){parrafo(`Autoridad ambiental: ${D.car}.`,{sz:9});
-      if(D.prov.length){subt('Contexto hidrogeológico oficial');for(const k of D.prov){const pr=PROV[k];if(!pr)continue;parrafo(`Provincia ${pr.n} (${k})`,{sz:9,bold:true,extra:0});parrafo('Acuíferos: '+pr.acu,{sz:8.5,extra:0});parrafo('Calidad del agua: '+pr.agua,{sz:8.5,extra:pr.rho?0:4});if(pr.rho)parrafo('Resistividades reportadas: '+pr.rho,{sz:8.5})}
+      if(D.prov.length){subt(hs?'Contexto regional (provincias hidrogeológicas del departamento)':'Contexto hidrogeológico oficial');for(const k of D.prov){const pr=PROV[k];if(!pr)continue;parrafo(`Provincia ${pr.n} (${k})`,{sz:9,bold:true,extra:0});parrafo('Acuíferos: '+pr.acu,{sz:8.5,extra:0});parrafo('Calidad del agua: '+pr.agua,{sz:8.5,extra:pr.rho?0:4});if(pr.rho)parrafo('Resistividades reportadas: '+pr.rho,{sz:8.5})}
         parrafo(`Fuente: ${FUENTE_ENA} Se listan las provincias que tocan el departamento; la que corresponde al sitio se confirma en el Mapa Geológico de Colombia del SGC.`,{sz:7.5,color:GRIS})}
       else parrafo('El Estudio Nacional del Agua 2014 (extracto usado) no trae fichas de acuíferos para este departamento.',{sz:8.5,color:GRIS})}
     else parrafo('No se indicó el departamento; no se incluye contexto regional.',{sz:8.5,color:GRIS});

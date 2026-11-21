@@ -1,7 +1,7 @@
 /* SEV Campo: guarda la app en el teléfono para que abra sin internet.
    Abre siempre la copia guardada y, si hay internet, la actualiza en segundo plano
    (los cambios se ven la siguiente vez que se abre). */
-const CACHE = 'sev-campo-v6';
+const CACHE = 'sev-campo-v8';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

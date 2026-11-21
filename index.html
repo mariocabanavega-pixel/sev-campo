@@ -1246,7 +1246,7 @@ function vEstudio(){const E=estActual();if(!E)return barra('Informe del estudio'
     <label class="f">Fecha del trabajo de campo<input type="date" data-est="fecha" value="${esc(E.fecha||'')}"></label>
     <b class="small" style="margin-top:6px">Empresa y quien firma (se guardan para otros estudios)</b>
     ${inp('empresa','Empresa','Ej: Cabana Pozos','firma')}
-    <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">${F.logo?`<img src="${F.logo}" alt="logo" style="height:54px;max-width:160px;object-fit:contain;border:1px solid var(--line,#dde3df);border-radius:6px;background:#fff">`:'<span class="small muted">Sin logo</span>'}<label class="btn">🖼 ${F.logo?'Cambiar':'Subir'} logo<input type="file" accept="image/*" data-logo hidden></label>${F.logo?'<button class="btn danger" data-a="logoDel">Quitar</button>':''}</div>
+    <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">${F.logo?`<img src="${F.logo}" alt="logo" style="height:84px;max-width:260px;object-fit:contain;border:1px solid var(--line,#dde3df);border-radius:6px;background:#fff">`:'<span class="small muted">Sin logo</span>'}<label class="btn">🖼 ${F.logo?'Cambiar':'Subir'} logo<input type="file" accept="image/*" data-logo hidden></label>${F.logo?'<button class="btn danger" data-a="logoDel">Quitar</button>':''}</div>
     ${inp('nit','NIT o identificación de la empresa','','firma')}${inp('direccion','Dirección de la empresa','','firma')}${inp('web','Página web o correo de la empresa','','firma')}
     ${inp('elaboro','Elaboró (nombre)','','firma')}${inp('cargo','Profesión o cargo','Ej: Geólogo, técnico en perforación','firma')}
     ${inp('matricula','Matrícula o tarjeta profesional (si tiene)','','firma')}${inp('contacto','Teléfono o correo','','firma')}${inp('ciudad','Ciudad','Ej: Santa Marta','firma')}
@@ -1574,8 +1574,11 @@ function marcasDeCoord(sevs,bb){const W=bb[2]-bb[0],H=bb[3]-bb[1];return sevs.fi
   const h=halfAB(s),dLat=h*Math.cos(s.rumbo*RAD)/110540,dLon=h*Math.sin(s.rumbo*RAD)/(111320*Math.cos(s.lat*RAD));
   const ax=(s.lon-dLon-bb[0])/W,ay=(bb[3]-(s.lat-dLat))/H,bx=(s.lon+dLon-bb[0])/W,by=(bb[3]-(s.lat+dLat))/H;
   return{sid:s.id,p:[[ax,ay],[bx,by]]}})}
-async function traerSatelite(E){const sevs=sevsDe(E).filter(tieneXY);
-  if(sevs.length<1){toast('Primero pon las coordenadas de los sondeos (pestaña Sitio)');return}
+async function traerSatelite(E){let sevs=sevsDe(E).filter(tieneXY);
+  if(sevs.length<1){/* el estudio puede apuntar a sondeos borrados o reimportados (id nuevo): se rehace la lista con los de la misma línea */
+    const L=E.linea?S.sondeos.filter(x=>x.linea===E.linea):[];
+    if(L.some(tieneXY)){E.sevs=L.map(x=>x.id);saveNow();sevs=sevsDe(E).filter(tieneXY)}}
+  if(sevs.length<1){const n=sevsDe(E).length;toast(n?'Los sondeos de este estudio no tienen coordenadas guardadas. Escríbelas o pégalas en la pestaña Sitio de cada sondeo.':'Este estudio no tiene sondeos asignados. Ábrelo de nuevo desde un sondeo con coordenadas.');return}
   if(navigator.onLine===false){toast('Necesitas señal para traer la imagen satelital');return}
   autoRumbos(E.linea||'');
   const bb=bboxLinea(sevs);
@@ -1968,7 +1971,7 @@ async function informePDF(s,prog=()=>{},opt={}){
     const lineas=t=>String(t||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
     /* portada */
     nueva();P.rect(0,0,595,10,{fill:VERDE});
-    if(EST.logoImg){const r=Math.min(205/EST.logoImg.w,105/EST.logoImg.h),lw=EST.logoImg.w*r,lh=EST.logoImg.h*r;P.image(EST.logoImg,555-lw,34,lw,lh)}
+    if(EST.logoImg){const r=Math.min(255/EST.logoImg.w,118/EST.logoImg.h),lw=EST.logoImg.w*r,lh=EST.logoImg.h*r;P.image(EST.logoImg,555-lw,28,lw,lh)}
     if(EST.empresa)P.text(40,70,EST.empresa.toUpperCase(),15,{bold:true,color:VERDE});
     {let cy=90;for(const v of [EST.nit?'NIT '+EST.nit:'',EST.direccion,EST.web].filter(Boolean)){P.text(40,cy,v,9,{color:GRIS});cy+=12}}
     P.text(40,150,'ESTUDIO GEOELÉCTRICO',26,{bold:true});

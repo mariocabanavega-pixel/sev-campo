@@ -1601,9 +1601,9 @@ async function traerSatelite(E){const sevs=sevsDe(E).filter(tieneXY);
     for(const f of E.fotos.filter(f=>f.autoSat))FDB.del(f.id);
     E.fotos=E.fotos.filter(f=>!f.autoSat);
     const idL=uid();await FDB.put(idL,{data:dataLimpia});FOTO_URL[idL]=dataLimpia;
-    const idM=uid();await FDB.put(idM,{data:dataMarcada});FOTO_URL[idM]=dataMarcada;
+    const idM=uid();await FDB.put(idM,{data:dataLimpia,ann:dataMarcada});FOTO_URL[idM]=dataMarcada;
     E.fotos.push({id:idL,cat:'sat',autoSat:true,limpia:true,desc:'Vista satelital del sitio. Fuente: Esri World Imagery.',w,h,fecha:new Date().toLocaleString('es-CO')});
-    E.fotos.push({id:idM,cat:'sat',autoSat:true,desc:'Imagen satelital con la ubicación de los sondeos y el trazo aproximado de sus líneas. Fuente: Esri World Imagery.',w,h,fecha:new Date().toLocaleString('es-CO')});
+    E.fotos.push({id:idM,cat:'sat',autoSat:true,marcas,desc:'Imagen satelital con la ubicación de los sondeos y el trazo aproximado de sus líneas. Fuente: Esri World Imagery.',w,h,fecha:new Date().toLocaleString('es-CO')});
     saveNow();V.satCargando=false;render();toast('Imagen satelital lista: una vista limpia (arriba) y otra con los SEV marcados (croquis)')}
   catch(e){V.satCargando=false;render();toast('No se pudo traer la imagen satelital. Revisa la señal e intenta otra vez.')}}
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const E=estActual();if(!E)return;
@@ -1982,6 +1982,8 @@ async function informePDF(s,prog=()=>{},opt={}){
     seccion('Introducción y objetivo');for(const l of lineas(EST.intro))parrafo(l,{sz:9.5,extra:5});
     seccion('Localización');
     const conXY=EST.sevs.filter(xyOK);
+    const satL=fot('sat').find(f=>f.limpia);
+    if(satL)imagen(satL,515,300,'Figura');
     parrafo(`El estudio se hizo en ${EST.titulo}${EST.sitio?', '+EST.sitio:''}. La tabla muestra los sondeos${conXY.length?', con las coordenadas del centro (estaca entre M y N) tomadas con el GPS del celular':''}.`,{sz:9.5,extra:6});
     const cXY=conXY.length?[{t:'Latitud',w:95},{t:'Longitud',w:95}]:[];
     tabla([{t:'SEV',w:conXY.length?120:250,al:'left'},...cXY,{t:'AB/2 máx.\n(m)',w:60},{t:'Rumbo AB\n(°)',w:55},{t:'Arreglo',w:conXY.length?90:150,al:'left'}],

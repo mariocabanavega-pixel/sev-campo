@@ -2,7 +2,7 @@
    Abre siempre la copia guardada y, si hay internet, la actualiza en segundo plano
    (los cambios se ven la siguiente vez que se abre). Siempre pide la versión fresca
    al servidor (cache:'reload') para no quedarse con una copia vieja. */
-const CACHE = 'sev-campo-v18';
+const CACHE = 'sev-campo-v19';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

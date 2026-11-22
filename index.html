@@ -462,6 +462,28 @@ function vSondeo(){
   `<main>${s.ejemplo?'<div class="note warn">Este sondeo tiene datos inventados para practicar.</div>':''}
   ${queSigue(s)}<div class="tabs" role="tablist">${tabs}</div>${body}</main>`}
 
+/** Terreno a lo largo de un sondeo: A a la izquierda, el centro (0) y B a la derecha, con los cambios de altura anotados en cada medida. */
+function terrenoSev(s){const A=new Map(),B=new Map();
+  for(const f of s.filas){const L=num(f.ab);if(!(L>0))continue;const z=zRel(s,f);if(!z)continue;A.set(L,z.zA);B.set(L,z.zB)}
+  const pA=[...A].sort((a,b)=>b[0]-a[0]).map(([L,z])=>({x:-L,z})),pB=[...B].sort((a,b)=>a[0]-b[0]).map(([L,z])=>({x:L,z}));
+  if(!pA.length)return null;const pts=[...pA,{x:0,z:0},...pB],zs=pts.map(p=>p.z),zmin=Math.min(...zs),zmax=Math.max(...zs);
+  if(zmax-zmin<0.005)return null;const Lmax=Math.max(...pts.map(p=>Math.abs(p.x))),ext=pts[0],ext2=pts[pts.length-1];
+  return{pts,zmin,zmax,Lmax,desn:ext2.z-ext.z,pend:(ext2.z-ext.z)/(2*Lmax)*100}}
+function svgTerrenoSev(T0){const W=360,H=170,L=46,R=14,T=24,B=34,w=W-L-R,h=H-T-B,pad=Math.max(0.3,(T0.zmax-T0.zmin)*0.25),lo=T0.zmin-pad,hi=T0.zmax+pad,
+  X=x=>L+w*(x+T0.Lmax)/(2*T0.Lmax),Y=z=>T+h*(hi-z)/(hi-lo);
+  let g='';for(let k=0;k<=4;k++){const z=lo+(hi-lo)*k/4,y=Y(z);g+=`<line x1="${L}" x2="${L+w}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width=".6"/><text x="${L-6}" y="${(y+3.5).toFixed(1)}" font-size="10.5" text-anchor="end" fill="var(--muted)">${sgn(+z.toFixed(2))}</text>`}
+  const pts=T0.pts.map(p=>`${X(p.x).toFixed(1)},${Y(p.z).toFixed(1)}`);
+  g+=`<polygon points="${X(T0.pts[0].x).toFixed(1)},${T+h} ${pts.join(' ')} ${X(T0.pts[T0.pts.length-1].x).toFixed(1)},${T+h}" fill="#8B5A2B" opacity=".18"/><polyline points="${pts.join(' ')}" fill="none" stroke="#8B5A2B" stroke-width="2.6" stroke-linejoin="round"/>`;
+  for(const p of T0.pts)g+=`<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.z).toFixed(1)}" r="3.2" fill="#8B5A2B" stroke="var(--surface)" stroke-width="1"/>`;
+  const e1=T0.pts[0],e2=T0.pts[T0.pts.length-1],c=T0.pts.find(p=>p.x===0);
+  g+=`<text x="${(X(e1.x)+4).toFixed(1)}" y="${(Y(e1.z)-9).toFixed(1)}" font-size="11" font-weight="700" fill="var(--text)">A</text><text x="${(X(e2.x)-4).toFixed(1)}" y="${(Y(e2.z)-9).toFixed(1)}" text-anchor="end" font-size="11" font-weight="700" fill="var(--text)">B</text><text x="${X(0).toFixed(1)}" y="${(Y(c.z)-9).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)">Centro</text>`;
+  for(const v of [-T0.Lmax,-T0.Lmax/2,0,T0.Lmax/2,T0.Lmax])g+=`<text x="${X(v).toFixed(1)}" y="${T+h+14}" font-size="10" text-anchor="middle" fill="var(--muted)">${fmtg(+Math.abs(v).toPrecision(3))}</text>`;
+  return`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Terreno a lo largo del sondeo"><rect x="${L}" y="${T}" width="${w}" height="${h}" fill="var(--surface)" stroke="var(--muted)"/>${g}
+    <text x="4" y="14" font-size="11" fill="var(--muted)">Altura respecto al centro (m)</text><text x="${L+w/2}" y="${H-4}" font-size="11" text-anchor="middle" fill="var(--muted)">Distancia al centro, AB/2 (m)</text></svg>`}
+function cardTerrenoSev(s){const T0=terrenoSev(s);if(!T0)return'';const esc_=Math.round((170-58)/(T0.zmax-T0.zmin+2*Math.max(0.3,(T0.zmax-T0.zmin)*0.25))/((360-60)/(2*T0.Lmax)));
+  return `<section class="card" style="display:flex;flex-direction:column;gap:8px"><b>⛰ Terreno a lo largo del sondeo</b>${svgTerrenoSev(T0)}
+   <div class="small">Entre A y B hay <b>${fmt(Math.abs(T0.desn),2)} m</b> de desnivel (${T0.desn>=0?'B más alto que A':'B más bajo que A'}), una pendiente media de <b>${fmt(Math.abs(T0.pend),1)} %</b>. Estos valores salen de los cambios de altura que anotaste en cada medida.</div>
+   <div class="small muted">El dibujo tiene la altura ampliada (unas ${Math.max(1,esc_)} veces) para que se note. A la izquierda está A y a la derecha B, con el centro en 0.</div></section>`}
 function tMedidas(s){
   const mns=mnColors(s),ed=!!V.editMed,nBaja=s.modo==='iv'?s.filas.filter(f=>{const d=dvProm(f);return d!=null&&d<SENAL_MIN}).length:0,avA=avisoArreglo(s)+(nBaja?`<div class="note warn small"><b>${nBaja} lectura${nBaja>1?'s':''} con señal baja</b> (menos de ${SENAL_MIN} mV entre M y N). En las AB/2 grandes, amplía MN con empalmes (1 → 5 → 10 m): la señal sube tantas veces como crece MN.</div>`:'');
   const items=s.filas.map((f,i)=>{const p=rho(s,f);
@@ -487,6 +509,7 @@ function tMedidas(s){
   <div class="row">${ed?'<button class="btn primary" data-a="editMed">Listo</button><button class="btn" data-a="ordenarAB">Ordenar por AB/2</button>'
     :`${pend>=0?`<button class="btn primary" data-a="medida" data-i="${pend}">Seguir midiendo (${pend+1})</button>`:''}<button class="btn" data-a="editMed">Ordenar y editar</button>`}</div>
   <section class="card"><div class="list">${items||'<div class="empty">Sin medidas. Agrega la primera o importa un TXT.</div>'}</div></section>
+  ${cardTerrenoSev(s)}
   <div class="row"><button class="btn" data-a="insertarM" data-i="-1">+ Agregar al principio</button><button class="btn" data-a="agregar">+ Agregar al final</button></div>`}
 function nuevaEntre(a,b){const x=num(a?.ab),y=num(b?.ab);let ab;
   if(x>0&&y>0)ab=+Math.sqrt(x*y).toPrecision(2);else if(x>0)ab=+(x*1.5).toPrecision(2);else if(y>0)ab=+(y/1.5).toPrecision(2);else ab=1;
@@ -1135,6 +1158,7 @@ function vGuia(){
    <li><b>Nombre del proyecto automático</b>: si no lo escribes tú, sale de los sondeos que marcaste en las casillas del informe. Si lo escribes, la app respeta tu texto (borra el texto para volver al automático).</li>
    <li><b>Informe con varios sondeos</b>: cada sondeo lleva su lectura y su consejo; hay una <b>tabla comparativa</b> y la recomendación final nombra el <b>sondeo recomendado</b> con su razón (capa con agua más gruesa y mejor ajuste). Es un criterio de la app, no una orden.</li>
    <li><b>Altitud automática</b>: en los datos del sondeo, con coordenadas e internet, toca <b>Traer altitud con las coordenadas</b>. Es aproximada (modelo de terreno de unos 30 m); corrígela a mano si la mediste. Se envían las coordenadas a un servicio externo de elevación (Open-Meteo).</li>
+   <li><b>Terreno a lo largo del sondeo</b>: en la pestaña <b>Medidas</b>, debajo de la lista, aparece un dibujo del terreno entre A y B con los cambios de altura que anotaste, el desnivel y la pendiente. También sale en el PDF del sondeo.</li>
    <li><b>Altura de los electrodos A y B</b>: en cada medida, abre <b>¿Cuánto subió o bajó A y B?</b> y escribe el cambio desde la medida anterior (+ sube, − baja; el botón +/− cambia el signo). La app suma medida tras medida, muestra cuánto llevan A y B respecto al centro y calcula K con la distancia real. M y N se toman a la altura del centro. Mide AB/2 sobre el terreno, con la cinta. También puedes escribir la altitud (m s.n.m.) si prefieres.</li>
    <li><b>Logo más grande</b> en la portada del informe.</li>
    <li><b>Respaldo con aviso</b>: la pantalla principal muestra cuándo fue el último respaldo y una franja <b>Respaldo pendiente</b> si hay cambios sin respaldar. El archivo lleva fecha y hora, y se manda con <b>Compartir</b> (Gmail, Drive, WhatsApp). Al importar un respaldo, también vuelven los estudios (las fotos no).</li>
@@ -2026,7 +2050,7 @@ const hayDatosPropios=()=>S.sondeos.some(s=>!s.ejemplo&&!s.demo&&!/San Fernando/
 function pendienteRespaldo(){const r=respInfo();return r.cambios&&hayDatosPropios()&&(!r.f||r.horas>=6)}
 function bannerRespaldo(){if(!pendienteRespaldo())return '';const r=respInfo();
   return `<div class="note warn" style="display:flex;flex-direction:column;gap:8px"><b>💾 Respaldo pendiente</b><span>Hay cambios sin respaldar (${respTexto(r)}). Tus datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, se pierden. Haz el respaldo y mándatelo por correo, Drive o WhatsApp.</span><button class="btn primary" data-a="respaldo">Respaldar ahora</button></div>`}
-const APP_VER='v18';
+const APP_VER='v19';
 function lineaRespaldo(){const r=respInfo();return `<div class="small muted">💾 ${respTexto(r).replace(/^./,c=>c.toUpperCase())}${r.cambios&&r.f?' · hay cambios nuevos':''}. · Versión de la app: ${APP_VER}</div>`}
 
 /* ---------- PDF propio (sin internet ni librerías) ---------- */
@@ -2275,6 +2299,14 @@ async function informePDF(s,prog=()=>{},opt={}){
   seccion('Curva de campo y modelos');
   parrafo('Resistividad aparente medida contra AB/2, en escala logarítmica. Las líneas continuas son la curva teórica y las capas (profundidad en el eje horizontal) del modelo de la app; en ocre, el modelo de IPI2Win si se anotó.',{sz:8.5,color:GRIS});
   grafica(250);
+  {const T0=terrenoSev(s);if(T0){seccion('Terreno a lo largo del sondeo');
+    parrafo(`Altura de los electrodos A y B respecto al centro, según los cambios anotados en cada medida. Entre A y B hay ${fmt(Math.abs(T0.desn),2)} m de desnivel (${T0.desn>=0?'B más alto':'B más bajo'}), pendiente media de ${fmt(Math.abs(T0.pend),1)} %. El dibujo tiene la altura ampliada para que se note.`,{sz:8.5,color:GRIS});
+    asegurar(150);const x0=70,w0=470,top=y+6,h0=110,pd=Math.max(0.3,(T0.zmax-T0.zmin)*0.25),lo=T0.zmin-pd,hi=T0.zmax+pd,XX=v=>x0+w0*(v+T0.Lmax)/(2*T0.Lmax),YY=z=>top+h0*(hi-z)/(hi-lo);
+    P.rect(x0,top,w0,h0,{stroke:'#888888'});for(let k=0;k<=4;k++){const z=lo+(hi-lo)*k/4;P.line(x0-4,YY(z),x0,YY(z),{color:GRIS});P.text(x0-7,YY(z)+3,sgn(+z.toFixed(2)).replace('−','-'),8,{align:'right',color:GRIS})}
+    for(let k=1;k<T0.pts.length;k++){const a=T0.pts[k-1],b=T0.pts[k];P.line(XX(a.x),YY(a.z),XX(b.x),YY(b.z),{color:'#8B5A2B',w:2})}
+    P.text(XX(T0.pts[0].x)+4,YY(T0.pts[0].z)-6,'A',9,{bold:true});P.text(XX(T0.pts[T0.pts.length-1].x)-4,YY(T0.pts[T0.pts.length-1].z)-6,'B',9,{bold:true,align:'right'});P.text(XX(0),YY(0)-6,'Centro',8,{align:'center',color:GRIS});
+    for(const v of [-T0.Lmax,0,T0.Lmax])P.text(XX(v),top+h0+11,fmtg(+Math.abs(v).toPrecision(3)),8,{align:'center',color:GRIS});
+    P.text(x0+w0/2,top+h0+23,'Distancia al centro, AB/2 (m)',8.5,{align:'center',color:GRIS});y=top+h0+30}}
   if(M){seccion('Interpretación preliminar');const z=espesores(M);
     M.rho.forEach((r,i)=>parrafo(`Capa ${i+1} (${i<z.length?`de ${fmt(i?z[i-1]:0,2)} a ${fmt(z[i],2)} m`:`desde ${fmt(z[i-1],2)} m hacia abajo`}): ${fmt(r,1)} Ohm·m. Posible ${materialDe(s,r).toLowerCase()}.`,{vineta:true,extra:1}));
     if(M.rho.length>2){const N=M.rho.length,Sx=M.h.map((h,i)=>({i,S:h/M.rho[i],T:h*M.rho[i]})),c=Sx.reduce((a,b)=>b.S>a.S?b:a),r=Sx.reduce((a,b)=>b.T>a.T?b:a);

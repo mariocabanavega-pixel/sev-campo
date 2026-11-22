@@ -513,15 +513,21 @@ function vMedida(){
     :s.modo==='r'?`<ol><li>Anota la resistencia R que muestra el equipo (ΔV/I, en ohmios).</li><li>La ρa sale sola: ρa = K × R.</li><li>Toca <b>Siguiente</b> o Enter.</li></ol>`:`<ol><li>Escribe la resistividad aparente ya calculada.</li><li>Toca <b>Siguiente</b> o Enter.</li></ol>`;
   return barra(`Medida ${i+1} de ${tot}`,s.nombre,true)+`<main>
   <div class="progress" aria-hidden="true"><i style="width:${(i+1)/tot*100}%"></i></div>
-  ${ayuda(help+'<p><b>Terreno inclinado (opcional)</b>: si A o B quedan más arriba o más abajo que el centro, abre <b>Altura de los electrodos A y B</b> y escribe la altitud de cada uno (m s.n.m.). M y N se toman a la altitud del centro del sondeo, que se escribe en los datos del sondeo o se trae con las coordenadas. La app calcula K con la distancia real entre electrodos, así que la ρa cambia un poco. Mide AB/2 con la cinta sobre el terreno. Si el terreno es muy inclinado (más del 10 % de la apertura), la app avisa: el relieve también distorsiona la corriente y el resultado se toma con reserva. Si no escribes alturas, el cálculo es el de siempre, con terreno plano.</p>')}
+  ${ayuda(help+'<p><b>Terreno inclinado (opcional)</b>: si A o B quedan más arriba o más abajo, abre <b>¿Cuánto subió o bajó A y B?</b> y escribe cuánto cambió cada uno desde donde lo pusiste la medida anterior: <b>+</b> si subió, <b>−</b> si bajó (el botón +/− cambia el signo). La app va sumando. M y N se toman a la altura del centro. La app calcula K con la distancia real entre electrodos, así que la ρa cambia un poco. Mide AB/2 con la cinta sobre el terreno. Si el terreno es muy inclinado (más del 10 % de la apertura), la app avisa: el relieve también distorsiona la corriente y el resultado se toma con reserva. Si no escribes alturas, el cálculo es el de siempre, con terreno plano.</p>')}
   ${emp?`<div class="note info"><b>Empalme:</b> esta AB/2 se mide dos veces, una con cada MN. ${empMsg(s,i)}</div>`:''}
   <section class="card" style="display:flex;flex-direction:column;gap:12px">
     <div class="grid2"><label class="f">AB/2 (m)<input id="inAB" inputmode="decimal" value="${fmtg(f.ab)}"></label>
     <label class="f">MN (m)<input id="inMN" inputmode="decimal" value="${fmtg(f.mn)}"></label></div>
-    <details${f.hA!=null||f.hB!=null?' open':''}><summary class="small"><b>Altura de los electrodos A y B</b> (opcional, si el terreno no es plano)</summary>
-      <div class="grid2" style="margin-top:8px"><label class="f">Altitud de A (m s.n.m.)<input id="inHA" inputmode="decimal" value="${fmtg(f.hA)}"></label>
-      <label class="f">Altitud de B (m s.n.m.)<input id="inHB" inputmode="decimal" value="${fmtg(f.hB)}"></label></div>
-      <div class="small muted" style="margin-top:6px">M y N se toman a la altitud del centro del sondeo (la de las coordenadas). Con esto la app calcula K con la distancia real entre electrodos. Mide AB/2 sobre el terreno, con la cinta. Necesita la altitud del sondeo.</div></details>
+    <details${s.filas.some(g=>g.dA!=null||g.dB!=null||g.hA!=null||g.hB!=null)?' open':''}><summary class="small"><b>¿Cuánto subió o bajó A y B?</b> (opcional, si el terreno no es plano)</summary>
+      <div class="small muted" style="margin:6px 0">Escribe el cambio <b>desde donde pusiste ese electrodo en la medida anterior</b>: <b>+</b> si ahora quedó más arriba, <b>−</b> si quedó más abajo. Si no cambió, déjalo vacío. En la primera medida cuenta desde el centro.</div>
+      <div class="grid2"><label class="f">Cambio de A (m)<div class="row" style="gap:6px"><input id="inDA" inputmode="decimal" placeholder="+0,4 o −0,3" value="${f.dA==null?'':(f.dA>0?'+':'')+fmtg(f.dA)}"><button class="btn" type="button" data-a="signo" data-id="inDA" aria-label="Cambiar signo de A">+/−</button></div></label>
+      <label class="f">Cambio de B (m)<div class="row" style="gap:6px"><input id="inDB" inputmode="decimal" placeholder="+0,4 o −0,3" value="${f.dB==null?'':(f.dB>0?'+':'')+fmtg(f.dB)}"><button class="btn" type="button" data-a="signo" data-id="inDB" aria-label="Cambiar signo de B">+/−</button></div></label></div>
+      <div id="accAB" class="small" style="margin-top:6px"></div>
+      <div class="small muted" style="margin-top:6px">M y N se toman a la altura del centro. La app suma los cambios medida tras medida y calcula K con la distancia real entre electrodos. Mide AB/2 sobre el terreno, con la cinta.</div>
+      <details style="margin-top:6px"><summary class="small">Prefiero escribir la altitud (m s.n.m.)</summary>
+        <div class="grid2" style="margin-top:6px"><label class="f">Altitud de A<input id="inHA" inputmode="decimal" value="${fmtg(f.hA)}"></label>
+        <label class="f">Altitud de B<input id="inHB" inputmode="decimal" value="${fmtg(f.hB)}"></label></div>
+        <div class="small muted">Solo cuenta si el sondeo tiene altitud en sus datos.</div></details></details>
     ${inputs}
   </section>
   <section class="card" style="display:flex;flex-direction:column;gap:8px">
@@ -578,8 +584,9 @@ function actualizarRes(){
    <div class="num">${p==null?'—':fmt(p)} <span class="unit">Ω·m</span></div>
    <div class="k">K = ${k==null?'—':fmt(k,2)} m${s.modo==='iv'&&dvProm(f)!=null?` · ΔV prom = ${fmt(dvProm(f),2)} mV`:''}</div>`;
   const av=[];const ab=num(f.ab),mn=num(f.mn);
-  if((num(f.hA)!=null||num(f.hB)!=null)&&num(s.alt)==null)av.push('Anotaste la altura de A o B, pero el sondeo no tiene altitud. Ponla en los datos del sondeo (o tráela con las coordenadas) para que cuente en el cálculo.');
-  else{const z=zRel(s,f);if(z&&ab>0){const p=Math.max(Math.abs(z.zA),Math.abs(z.zB))/ab*100;if(p>10)av.push(`El terreno es inclinado (hasta ${fmt(p,0)} % de la apertura). El K ya usa la distancia real, pero el relieve también distorsiona la corriente: toma el resultado con reserva y, si puedes, ubica la línea sobre terreno más plano.`)}}
+  if((num(f.hA)!=null||num(f.hB)!=null)&&num(s.alt)==null&&num(f.dA)==null&&num(f.dB)==null)av.push('Anotaste la altitud de A o B, pero el sondeo no tiene altitud. Ponla en los datos del sondeo, o escribe mejor el cambio (+ sube, − baja) desde la medida anterior.');
+  {const ac=$('#accAB'),z=zRel(s,f);if(ac)ac.innerHTML=z?`Hasta esta medida: <b>A ${sgn(z.zA)} m</b> y <b>B ${sgn(z.zB)} m</b> respecto al centro.`:'';}
+  {const z=zRel(s,f);if(z&&ab>0){const p=Math.max(Math.abs(z.zA),Math.abs(z.zB))/ab*100;if(p>10)av.push(`El terreno es inclinado (hasta ${fmt(p,0)} % de la apertura). El K ya usa la distancia real, pero el relieve también distorsiona la corriente: toma el resultado con reserva y, si puedes, ubica la línea sobre terreno más plano.`)}}
   if(ab!=null&&mn!=null&&k==null)av.push('Revisa AB/2 y MN: AB/2 tiene que ser mayor que la mitad de MN.');
   else if(ab!=null&&mn!=null&&mn>0.4*ab)av.push(`MN es grande para esta AB/2 (debería ser máximo ${fmt(0.4*ab,1)} m). La lectura puede salir distorsionada.`);
   if(s.modo==='iv'){const a=num(f.dv1),b=num(f.dv2),sp=num(f.sp);
@@ -947,7 +954,13 @@ function cargarEstudios(){let n=0,c=0;for(const o of ESTUDIOS){const ex=S.sondeo
 const ARREGLOS={schlum:'Schlumberger (A y B simétricos)',semi:'Semi-Schlumberger (B fijo muy lejos, solo se abre A)'};
 const esSemi=s=>!!s&&s.arreglo==='semi';
 /** Alturas de A y B respecto al centro (m). Se escriben como altitud (m s.n.m.); M y N se toman a la altitud del centro del sondeo (la de las coordenadas). */
-function zRel(s,f){const c=num(s.alt),a=num(f.hA),b=num(f.hB);if(c==null||(a==null&&b==null))return null;return{zA:a==null?0:a-c,zB:b==null?0:b-c}}
+/** Altura de A y B respecto al centro (m). Se acumulan los cambios anotados en cada medida (+ sube, − baja) desde la medida anterior; si una medida no tiene dato, A o B siguen donde estaban. Si hay altitud directa (m s.n.m.) y el sondeo tiene altitud, esa manda. */
+function zRel(s,f){let zA=0,zB=0,hay=false;
+  for(const g of s.filas){const da=num(g.dA),db=num(g.dB);if(da!=null){zA+=da;hay=true}if(db!=null){zB+=db;hay=true}if(g===f)break}
+  const c=num(s.alt),a=num(f.hA),b=num(f.hB);
+  if(c!=null&&a!=null){zA=a-c;hay=true}if(c!=null&&b!=null){zB=b-c;hay=true}
+  return hay?{zA,zB}:null}
+const sgn=v=>v==null?'—':(v>0?'+':v<0?'−':'')+fmtg(+Math.abs(v).toFixed(2));
 /** K con la geometría real: A y B a su altura, M y N a la altura del centro. AB/2 se supone medido sobre el terreno (con cinta). */
 function K3D(L,mn,zA,zB,semi){const a=mn/2,dA=Math.sqrt(Math.max(L*L-zA*zA,0)),dB=Math.sqrt(Math.max(L*L-zB*zB,0));
   if(dA<=a||(!semi&&dB<=a))return null;
@@ -1122,7 +1135,7 @@ function vGuia(){
    <li><b>Nombre del proyecto automático</b>: si no lo escribes tú, sale de los sondeos que marcaste en las casillas del informe. Si lo escribes, la app respeta tu texto (borra el texto para volver al automático).</li>
    <li><b>Informe con varios sondeos</b>: cada sondeo lleva su lectura y su consejo; hay una <b>tabla comparativa</b> y la recomendación final nombra el <b>sondeo recomendado</b> con su razón (capa con agua más gruesa y mejor ajuste). Es un criterio de la app, no una orden.</li>
    <li><b>Altitud automática</b>: en los datos del sondeo, con coordenadas e internet, toca <b>Traer altitud con las coordenadas</b>. Es aproximada (modelo de terreno de unos 30 m); corrígela a mano si la mediste. Se envían las coordenadas a un servicio externo de elevación (Open-Meteo).</li>
-   <li><b>Altura de los electrodos A y B</b>: en cada medida, abre <b>Altura de los electrodos A y B</b> y escribe su altitud. M y N se toman a la altitud del centro del sondeo. Mide AB/2 sobre el terreno, con la cinta. La app calcula K con la distancia real entre electrodos y avisa si el terreno es muy inclinado. Necesita la altitud del sondeo.</li>
+   <li><b>Altura de los electrodos A y B</b>: en cada medida, abre <b>¿Cuánto subió o bajó A y B?</b> y escribe el cambio desde la medida anterior (+ sube, − baja; el botón +/− cambia el signo). La app suma medida tras medida, muestra cuánto llevan A y B respecto al centro y calcula K con la distancia real. M y N se toman a la altura del centro. Mide AB/2 sobre el terreno, con la cinta. También puedes escribir la altitud (m s.n.m.) si prefieres.</li>
    <li><b>Logo más grande</b> en la portada del informe.</li>
    <li><b>Respaldo con aviso</b>: la pantalla principal muestra cuándo fue el último respaldo y una franja <b>Respaldo pendiente</b> si hay cambios sin respaldar. El archivo lleva fecha y hora, y se manda con <b>Compartir</b> (Gmail, Drive, WhatsApp). Al importar un respaldo, también vuelven los estudios (las fotos no).</li>
    <li><b>Perfil 2D con relieve</b>: si los sondeos tienen altitud, el perfil se dibuja sobre el terreno, con una línea café, y debajo sale el <b>Perfil del terreno</b> con escala vertical ampliada, el desnivel y la pendiente. El PDF del perfil también lo trae. El botón <b>Traer la altitud de los sondeos con coordenadas</b> llena las que falten, con internet.</li></ul>`),
@@ -1966,8 +1979,9 @@ function accionArchivo(m){const A=window._arch;if(!A)return;
   if(m==='compartir'){const F=A.fileC||A.file,ok=navigator.canShare?navigator.canShare({files:[F]}):true;
     if(!ok){toast('Este celular no deja compartir este tipo de archivo directo. Toca Descargar y adjúntalo desde WhatsApp o el correo.');return}
     navigator.share({files:[F],title:F.name}).then(()=>cerrarArch()).catch(e=>{if(e&&e.name!=='AbortError')toast('No se pudo compartir ('+(e&&e.name||'error')+'). Toca Descargar y adjunta el archivo a mano.')});return}
-  if(m==='wa'){window.open('https://wa.me/?text='+encodeURIComponent('SEV Campo: te envío el archivo '+A.name+' (lo adjunto aparte).'),'_blank');return}
-  if(m==='mail'){location.href='mailto:?subject='+encodeURIComponent('SEV Campo: '+A.name)+'&body='+encodeURIComponent('Adjunto el archivo '+A.name+' (descárgalo antes y adjúntalo a este correo).');return}
+  if(m==='wa'||m==='mail'){try{const a=document.createElement('a');a.href=A.url;a.download=A.name;document.body.appendChild(a);a.click();a.remove()}catch(e){}toast('Se guardó '+A.name+' en Descargas. Adjúntalo en el mensaje.')}
+  if(m==='wa'){setTimeout(()=>window.open('https://wa.me/?text='+encodeURIComponent('SEV Campo: te envío el archivo '+A.name+' (lo adjunto aparte).'),'_blank'),700);return}
+  if(m==='mail'){setTimeout(()=>location.href='mailto:?subject='+encodeURIComponent('SEV Campo: '+A.name)+'&body='+encodeURIComponent('Adjunto el archivo '+A.name+' (descárgalo antes y adjúntalo a este correo).'),700);return}
   if(m==='abrir'){let w=null;try{w=window.open(A.url,'_blank')}catch(e){}
     toast(w?(A.mime==='application/pdf'?'Se abrió el PDF: guárdalo con el botón de descarga del visor.':'Se abrió el archivo: guárdalo con Ctrl+S.'):'Este visor no deja abrir otra pestaña.');return}
   if(m==='copiar'){copiarTexto(A.data.replace(/^﻿/,''),null);return}}
@@ -2012,7 +2026,7 @@ const hayDatosPropios=()=>S.sondeos.some(s=>!s.ejemplo&&!s.demo&&!/San Fernando/
 function pendienteRespaldo(){const r=respInfo();return r.cambios&&hayDatosPropios()&&(!r.f||r.horas>=6)}
 function bannerRespaldo(){if(!pendienteRespaldo())return '';const r=respInfo();
   return `<div class="note warn" style="display:flex;flex-direction:column;gap:8px"><b>💾 Respaldo pendiente</b><span>Hay cambios sin respaldar (${respTexto(r)}). Tus datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, se pierden. Haz el respaldo y mándatelo por correo, Drive o WhatsApp.</span><button class="btn primary" data-a="respaldo">Respaldar ahora</button></div>`}
-const APP_VER='v17';
+const APP_VER='v18';
 function lineaRespaldo(){const r=respInfo();return `<div class="small muted">💾 ${respTexto(r).replace(/^./,c=>c.toUpperCase())}${r.cambios&&r.f?' · hay cambios nuevos':''}. · Versión de la app: ${APP_VER}</div>`}
 
 /* ---------- PDF propio (sin internet ni librerías) ---------- */
@@ -2549,6 +2563,7 @@ document.addEventListener('click',e=>{
     case 'importarAqui':go({view:'importar',impTarget:s.id,imp:null});break;
     case 'perfil':go({view:'perfil'});break;
     case 'eje':go({eje:t.dataset.v});break;
+    case 'signo':{const el=document.getElementById(e.target.closest('[data-a]').dataset.id);if(el){let v=el.value.trim().replace('−','-');if(v===''||v==='+'||v==='-'){el.value=v==='-'?'+':'-'}else if(v[0]==='-')el.value='+'+v.slice(1);else el.value='-'+v.replace(/^[+]/,'');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus()}break}
     case 'altLinea':altLinea();break;
     case 'pLinea':go({linea:t.dataset.v});break;
     case 'pVista':go({pvista:t.dataset.v});break;
@@ -2595,7 +2610,7 @@ document.addEventListener('click',e=>{
   }});
 document.addEventListener('input',e=>{
   if(V.view!=='medida')return;const f=cur().filas[V.idx],id=e.target.id,v=e.target.value.trim();
-  const map={inAB:'ab',inMN:'mn',inHA:'hA',inHB:'hB',inI:'i',inD1:'dv1',inD2:'dv2',inSP:'sp',inR:'r',inRHO:'rhoa',inNota:'nota'};if(!map[id])return;
+  const map={inAB:'ab',inMN:'mn',inHA:'hA',inHB:'hB',inDA:'dA',inDB:'dB',inI:'i',inD1:'dv1',inD2:'dv2',inSP:'sp',inR:'r',inRHO:'rhoa',inNota:'nota'};if(!map[id])return;
   f[map[id]]=id==='inNota'?v:(v===''?null:num(v));save();actualizarRes()});
 document.addEventListener('change',e=>{
   const t=e.target;

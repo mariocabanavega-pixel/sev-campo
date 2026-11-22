@@ -1936,7 +1936,7 @@ function csvExcel(s){
 function txtIPI(s){return s.filas.filter(f=>!f.off).map(f=>({ab:num(f.ab),mn:num(f.mn),p:rho(s,f)})).filter(o=>o.p!=null).map(o=>`${o.ab}\t${o.mn??''}\t${o.p.toFixed(2)}`).join('\r\n')+'\r\n'}
 function nombreArchivo(s,ext){const b=(s.nombre||'sondeo').replace(/[^\wáéíóúñÁÉÍÓÚÑ\- ]/g,'').trim().replace(/\s+/g,'_');return b+({txt:'_IPI2Win.txt',csv:'.csv',pdf:'.pdf'}[ext])}
 let enMarco=false;try{enMarco=window.self!==window.top}catch(e){enMarco=true}
-function guardarArchivo(name,mime,data,ext){
+function guardarArchivo(name,mime,data,ext,textoCompartir){
   if(window.AndroidBridge&&AndroidBridge.saveFile){let r='';try{r=AndroidBridge.saveFile(name,mime,data)}catch(e){r='error'}
     if(String(r).startsWith('error'))toast('No se pudo guardar en el celular.');else toast('Guardado en Descargas: '+name);return}
   const bytes=new Uint8Array(data.length);for(let i=0;i<data.length;i++)bytes[i]=data.charCodeAt(i)&255;
@@ -1944,15 +1944,16 @@ function guardarArchivo(name,mime,data,ext){
   const blob=bin?new Blob([bytes],{type:mime}):new Blob([data],{type:mime+';charset=utf-8'});
   const url=URL.createObjectURL(blob);let file=null;try{file=new File([blob],name,{type:mime})}catch(e){}
   /* el botón Compartir sale siempre que el navegador sepa compartir; si no acepta el archivo, se avisa al tocarlo */
-  const puedePicker=!!window.showSaveFilePicker&&!enMarco,puedeCompartir=!!(file&&navigator.share&&window.isSecureContext&&/^https?:$/.test(location.protocol)),localCel=location.protocol!=='https:'&&location.hostname!=='localhost';
-  window._arch={name,mime,data,ext,blob,url,file};
+  const puedePicker=!!window.showSaveFilePicker&&!enMarco;let fileC=null;try{if(textoCompartir)fileC=new File([textoCompartir],name.replace(/\.\w+$/,'')+'.txt',{type:'text/plain'})}catch(e){}
+  const puedeCompartir=!!((fileC||file)&&navigator.share&&window.isSecureContext&&/^https?:$/.test(location.protocol)),localCel=location.protocol!=='https:'&&location.hostname!=='localhost';
+  window._arch={name,mime,data,ext,blob,url,file,fileC};
   const kb=Math.max(1,Math.round(blob.size/1024)),texto=!bin;
   $('#layer').innerHTML=`<div class="modal" data-a="cerrarArch"><div class="card" role="dialog" aria-modal="true" aria-label="Guardar archivo">
     <b>Archivo listo</b><div class="small muted">${esc(name)} · ${kb} KB</div>
     ${enMarco?`<div class="note warn small">Estás viendo la app dentro de una <b>vista previa</b> (de Claude, WPS u otro visor) que <b>bloquea las descargas</b>. Para guardar archivos, descarga <b>sev.html</b> y ábrelo con doble clic en Chrome, Edge o Firefox. Mientras tanto puedes usar ${texto?'<b>Copiar contenido</b>':'<b>Compartir</b> o <b>Abrir en otra pestaña</b> si aparecen'}.</div>`:''}
     ${puedePicker?'<button class="btn primary" data-a="gArch" data-m="picker">Guardar como…</button>':''}
     <button class="btn${puedePicker?'':' primary'}" data-a="gArch" data-m="descargar">Descargar</button>
-    ${puedeCompartir?'<button class="btn" data-a="gArch" data-m="compartir">Compartir (WhatsApp, Drive, correo…)</button>':`<button class="btn" data-a="gArch" data-m="wa">Enviar por WhatsApp</button><button class="btn" data-a="gArch" data-m="mail">Enviar por correo</button><div class="small muted">${localCel?'Estás usando la app como <b>archivo local</b>, y así el celular no deja compartir directo. Toca <b>Guardar como…</b> o <b>Descargar</b>, y luego adjunta el archivo desde WhatsApp o el correo. Para tener el botón Compartir, abre la app desde su dirección de internet (https).':'Este navegador no puede adjuntar el archivo solo: primero toca <b>Descargar</b>, y en WhatsApp o el correo adjunta el archivo descargado.'}</div>`}
+    ${puedeCompartir?`<button class="btn" data-a="gArch" data-m="compartir">Compartir (WhatsApp, Drive, correo…)</button>${fileC?'<div class="small muted">Al compartir se envía como texto (.txt), porque el celular no deja compartir .zip. Para recuperarlo, usa Importar con ese archivo.</div>':''}`:`<button class="btn" data-a="gArch" data-m="wa">Enviar por WhatsApp</button><button class="btn" data-a="gArch" data-m="mail">Enviar por correo</button><div class="small muted">${localCel?'Estás usando la app como <b>archivo local</b>, y así el celular no deja compartir directo. Toca <b>Guardar como…</b> o <b>Descargar</b>, y luego adjunta el archivo desde WhatsApp o el correo. Para tener el botón Compartir, abre la app desde su dirección de internet (https).':'Este navegador no puede adjuntar el archivo solo: primero toca <b>Descargar</b>, y en WhatsApp o el correo adjunta el archivo descargado.'}</div>`}
     <button class="btn" data-a="gArch" data-m="abrir">Abrir en otra pestaña</button>
     ${texto?'<button class="btn" data-a="gArch" data-m="copiar">Copiar contenido</button>':''}
     <button class="btn ghost" data-a="cerrarArch">Cerrar</button></div></div>`}
@@ -1962,9 +1963,9 @@ function accionArchivo(m){const A=window._arch;if(!A)return;
       .catch(e=>{if(e&&e.name==='AbortError')return;toast('Este navegador no dejó usar "Guardar como". Prueba Descargar.')});return}
   if(m==='descargar'){try{const a=document.createElement('a');a.href=A.url;a.download=A.name;a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
       toast(enMarco?'Este visor bloquea descargas: abre sev.html en Chrome, Edge o Firefox.':(window.showSaveFilePicker&&location.protocol==='file:')?`Mira tu carpeta Descargas. Si quedó con el nombre "download", renómbralo a ${A.name} o usa Guardar como…`:'Mira tu carpeta Descargas. Si no aparece, usa otra opción.')}catch(e){toast('No se pudo descargar.')}return}
-  if(m==='compartir'){const ok=navigator.canShare?navigator.canShare({files:[A.file]}):true;
+  if(m==='compartir'){const F=A.fileC||A.file,ok=navigator.canShare?navigator.canShare({files:[F]}):true;
     if(!ok){toast('Este celular no deja compartir este tipo de archivo directo. Toca Descargar y adjúntalo desde WhatsApp o el correo.');return}
-    navigator.share({files:[A.file],title:A.name,text:'SEV Campo: '+A.name}).then(()=>cerrarArch()).catch(e=>{if(e&&e.name!=='AbortError')toast('No se pudo compartir. Toca Descargar y adjunta el archivo a mano.')});return}
+    navigator.share({files:[F],title:F.name}).then(()=>cerrarArch()).catch(e=>{if(e&&e.name!=='AbortError')toast('No se pudo compartir ('+(e&&e.name||'error')+'). Toca Descargar y adjunta el archivo a mano.')});return}
   if(m==='wa'){window.open('https://wa.me/?text='+encodeURIComponent('SEV Campo: te envío el archivo '+A.name+' (lo adjunto aparte).'),'_blank');return}
   if(m==='mail'){location.href='mailto:?subject='+encodeURIComponent('SEV Campo: '+A.name)+'&body='+encodeURIComponent('Adjunto el archivo '+A.name+' (descárgalo antes y adjúntalo a este correo).');return}
   if(m==='abrir'){let w=null;try{w=window.open(A.url,'_blank')}catch(e){}
@@ -2003,7 +2004,7 @@ async function leerZip(buf){const b=new Uint8Array(buf),v=new DataView(buf);let 
 function respaldo(){const d=new Date(),p=n=>String(n).padStart(2,'0'),base=`Respaldo_SEV_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
   const txt=JSON.stringify({app:'SEV Campo',v:3,fecha:d.toISOString(),sondeos:S.sondeos,zonas:S.zonas,informes:S.informes,zonasGeo:S.zonasGeo},null,1);
   S.opciones.respFecha=d.toISOString();S.opciones.respVer=(S.opciones.ver||0)+1;saveNow(); /* el guardado sube 'ver' en 1: queda igual a 'respVer' */
-  guardarArchivo(base+'.zip','application/zip',zipUno(base+'.json',txt),'zip')}
+  guardarArchivo(base+'.zip','application/zip',zipUno(base+'.json',txt),'zip',txt)}
 /** Estado del respaldo: cuándo fue el último y si hay cambios después. */
 function respInfo(){const o=S.opciones,f=o.respFecha?new Date(o.respFecha):null,h=f?(Date.now()-f.getTime())/36e5:null;return{f,horas:h,cambios:(o.ver||0)!==(o.respVer==null?-1:o.respVer)}}
 const respTexto=r=>!r.f?'todavía no has hecho ningún respaldo':'último respaldo hace '+(r.horas<1?'menos de 1 hora':r.horas<24?Math.floor(r.horas)+' hora(s)':Math.floor(r.horas/24)+' día(s)');
@@ -2011,7 +2012,7 @@ const hayDatosPropios=()=>S.sondeos.some(s=>!s.ejemplo&&!s.demo&&!/San Fernando/
 function pendienteRespaldo(){const r=respInfo();return r.cambios&&hayDatosPropios()&&(!r.f||r.horas>=6)}
 function bannerRespaldo(){if(!pendienteRespaldo())return '';const r=respInfo();
   return `<div class="note warn" style="display:flex;flex-direction:column;gap:8px"><b>💾 Respaldo pendiente</b><span>Hay cambios sin respaldar (${respTexto(r)}). Tus datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, se pierden. Haz el respaldo y mándatelo por correo, Drive o WhatsApp.</span><button class="btn primary" data-a="respaldo">Respaldar ahora</button></div>`}
-const APP_VER='v16';
+const APP_VER='v17';
 function lineaRespaldo(){const r=respInfo();return `<div class="small muted">💾 ${respTexto(r).replace(/^./,c=>c.toUpperCase())}${r.cambios&&r.f?' · hay cambios nuevos':''}. · Versión de la app: ${APP_VER}</div>`}
 
 /* ---------- PDF propio (sin internet ni librerías) ---------- */

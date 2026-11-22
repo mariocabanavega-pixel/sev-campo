@@ -1,11 +1,14 @@
-﻿/* SEV Campo: guarda la app en el teléfono para que abra sin internet.
+/* SEV Campo: guarda la app en el teléfono para que abra sin internet.
    Abre siempre la copia guardada y, si hay internet, la actualiza en segundo plano
-   (los cambios se ven la siguiente vez que se abre). */
-const CACHE = 'sev-campo-v15';
+   (los cambios se ven la siguiente vez que se abre). Siempre pide la versión fresca
+   al servidor (cache:'reload') para no quedarse con una copia vieja. */
+const CACHE = 'sev-campo-v16';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(ARCHIVOS.map(u =>
+    fetch(u, {cache: 'reload'}).then(r => { if (!r.ok) throw new Error(u); return c.put(u, r); })
+  ))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -18,9 +21,9 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(caches.open(CACHE).then(async c => {
-    const clave = req.mode === 'navigate' ? './index.html' : req;
+    const nav = req.mode === 'navigate', clave = nav ? './index.html' : req;
     const guardada = await c.match(clave, {ignoreSearch: true});
-    const red = fetch(req).then(r => {
+    const red = fetch(nav ? './index.html' : req, {cache: 'reload'}).then(r => {
       if (r && r.ok) c.put(clave, r.clone());
       return r;
     }).catch(() => null);

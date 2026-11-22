@@ -348,7 +348,7 @@ if(!S||!Array.isArray(S.sondeos))S=seed();
 S.opciones=Object.assign({minErr:2,maxN:5,tol:10},S.opciones||{});
 for(const s of S.sondeos){if(s.alt===undefined)s.alt=/San Fernando/.test(s.nombre)?19:null;if(s.x===undefined)s.x=null;if(s.linea===undefined)s.linea='';s.filas=s.filas.map(fila)}
 let saveT=null,avisoGuardar=false;
-function guardarYa(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){if(!avisoGuardar){avisoGuardar=true;toast('Este visor no deja guardar. Abre el archivo en Chrome, Edge o Firefox.')}return false}}
+function guardarYa(){try{S.opciones.ver=(S.opciones.ver||0)+1;localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){if(!avisoGuardar){avisoGuardar=true;toast('Este visor no deja guardar. Abre el archivo en Chrome, Edge o Firefox.')}return false}}
 function save(){clearTimeout(saveT);saveT=setTimeout(guardarYa,250)}
 function saveNow(){clearTimeout(saveT);guardarYa()}
 save();
@@ -395,14 +395,17 @@ function vLista(){
   <li><b>Importar</b>: traes las lecturas desde un archivo TXT o CSV (hay una plantilla), o un respaldo de otro aparato.</li>
   <li>Toca un sondeo para anotar medidas, ver la curva, calcular las <b>capas</b> y exportar a <b>PDF</b>, Excel o IPI2Win.</li>
   <li><b>Perfil 2D</b>: junta los SEV de una misma línea (L1, L2…) y dibuja la sección: columnas de capas y el corte interpolado, con informe PDF.</li>
-  <li><b>Respaldo</b>: guarda todos los sondeos en un solo archivo para pasarlos al PC o a otro celular.</li>
+  <li><b>💾 Respaldo</b>: guarda todos los sondeos y estudios en un solo archivo, con la fecha y la hora en el nombre (por ejemplo Respaldo_SEV_2026-11-21_1903). Al tocarlo se abre el menú de <b>Compartir</b> del celular: elige Gmail, Drive o WhatsApp y mándatelo a ti mismo. Debajo de los botones ves cuándo hiciste el último respaldo. Si hay cambios sin respaldar, sale una franja amarilla <b>Respaldo pendiente</b>, y al terminar las medidas de un sondeo la app te lo recuerda. Los datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, solo el respaldo los salva. Las fotos del informe no van en el respaldo.</li>
+  <li><b>📦 Copiar</b> (botón de cada sondeo en la lista): guarda <b>solo ese sondeo</b> en un archivo, con sus medidas, capas y coordenadas. En el otro equipo lo cargas con <b>Importar</b>. Sirve para pasar un sondeo del celular al computador o al servidor sin llevar todos.</li>
   <li><b>Editar lista</b> (arriba a la derecha): borra, duplica, cambia los datos o el orden de los sondeos.</li>
   <li><b>Mi tabla de resistividades</b>: junta los pozos perforados en sitios con SEV (pestaña <b>Pozo</b> de cada sondeo) y arma la tabla propia de tu zona.</li>
   <li><b>Tablas de materiales por zona</b>: la resistividad de cada material cambia según la región; aquí guardas tablas calibradas con pozos o con el agua de cada zona.</li></ol>
   <p>Todo se guarda solo en este aparato, sin internet. Para la explicación completa de todo, abre la <b>Guía de uso</b>.</p>`)}
   ${S.opciones.guiaVista?'':`<div class="note info" style="display:flex;flex-direction:column;gap:8px"><b>👋 ¿Primera vez con SEV Campo?</b><span>La <b>Guía de uso</b> explica paso a paso cómo crear un sondeo, anotar las medidas, calcular las capas y sacar el informe.</span><div class="row"><button class="btn primary" data-a="guia">Abrir la guía</button><button class="btn" data-a="guiaVista">Ya la conozco</button></div></div>`}
+  ${bannerRespaldo()}
   <button class="btn primary" data-a="nuevo">+ Nuevo sondeo</button>
-  <div class="row"><button class="btn" data-a="importar">Importar</button><button class="btn" data-a="perfil">Perfil 2D</button><button class="btn" data-a="respaldo">Respaldo</button></div>
+  <div class="row"><button class="btn" data-a="importar">Importar</button><button class="btn" data-a="perfil">Perfil 2D</button><button class="btn" data-a="respaldo">💾 Respaldo</button></div>
+  ${lineaRespaldo()}
   <div class="row"><button class="btn" data-a="zonasLista">Tablas de materiales por zona</button><button class="btn" data-a="calib">Mi tabla de resistividades</button></div>
   <button class="btn" data-a="guia">📘 Guía de uso (todas las funciones)</button>
   ${ed?'<div class="note info small">Modo edición: usa los botones de cada sondeo. Toca <b>Listo</b> para terminar.</div>':''}
@@ -414,7 +417,8 @@ function vEditar(){
   return barra(V.nuevo?'Nuevo sondeo':'Datos del sondeo','',true)+`<main>
   ${ayuda(`<ul><li><b>Qué vas a anotar</b> define las casillas de cada medida: con tu aparato casero anotas I, ΔV 1 y ΔV 2; con un equipo como el Syscal anotas la resistencia R; o escribes la ρa si ya la tienes calculada.</li>
   <li><b>Distancias</b>: la plantilla con empalmes (1 a 150 m) es la recomendada; luego puedes cambiar AB/2 y MN en cada medida.</li>
-  <li><b>Altitud</b> (m s.n.m.) sirve para la columna Alt de las capas, igual que en IPI2Win. Si la dejas vacía, Alt se muestra como profundidad negativa.</li>
+  <li><b>Altitud</b> (m s.n.m.) del centro del sondeo. Sirve para la columna Alt de las capas, igual que en IPI2Win (si la dejas vacía, Alt se muestra como profundidad negativa) y para el cálculo con la altura de los electrodos A y B, si el terreno no es plano.</li>
+  <li><b>Traer altitud con las coordenadas</b> (aparece si el sondeo ya tiene coordenadas): con internet, la app consulta un servicio de elevación del terreno y llena la altitud. Sale <b>aproximada</b> (modelo de terreno de unos 30 m) y el campo lo dice. Si mediste la altitud con un buen GPS, escríbela encima. Se envían las coordenadas del sitio al servicio externo (Open-Meteo); si el sitio es confidencial, escríbela a mano.</li>
   <li><b>Posición X</b> es la distancia del sondeo a lo largo de una línea, y <b>Línea</b> su nombre (L1, L2…): con eso se arma el <b>Perfil 2D</b>.</li>
   <li><b>Arreglo</b>: Schlumberger normal, o <b>semi-Schlumberger</b> cuando no hay espacio: B se deja fijo muy lejos y solo se abre A (en AB/2 anotas la distancia de A al centro). La app calcula K el doble.</li>
   <li>Para eliminar el sondeo usa <b>Borrar este sondeo</b> al final (también desde <b>Editar lista</b> en la pantalla principal).</li></ul>`)}
@@ -425,7 +429,8 @@ function vEditar(){
   <label class="f">Qué vas a anotar<select id="edModo">${Object.entries(MODOS).map(([k,v])=>`<option value="${k}"${s.modo===k?' selected':''}>${v}</option>`).join('')}</select></label>
   ${V.nuevo?`<label class="f">Distancias AB/2 y MN<select id="edTpl"><option value="empalmes">De 1 a 150 m, con empalmes (19 medidas)</option>
     <option value="cada10">Cada 10 m, de 10 a 180 m, MN 10 m (18 medidas)</option><option value="vacia">Vacío, las agrego yo</option></select></label>`:''}
-  <div class="grid2"><label class="f">Altitud (m s.n.m.)<input id="edAlt" inputmode="decimal" value="${fmtg(s.alt)}" placeholder="Opcional"></label>
+  ${tieneXY(s)?`<div class="note info small" style="display:flex;flex-direction:column;gap:6px">Altitud desde las coordenadas (necesita internet; es aproximada, de un modelo de terreno de unos 30 m). Se envían las coordenadas a un servicio externo de elevación (Open-Meteo).<button type="button" class="btn sm" data-a="altAuto">📡 Traer altitud con las coordenadas</button></div>`:''}
+  <div class="grid2"><label class="f">Altitud (m s.n.m.)${s.altAuto?' · aproximada':''}<input id="edAlt" inputmode="decimal" value="${fmtg(s.alt)}" placeholder="Opcional"></label>
   <label class="f">Posición X en el perfil (m)<input id="edX" inputmode="decimal" value="${fmtg(s.x)}" placeholder="Opcional"></label></div>
   <label class="f">Línea del perfil<input id="edLinea" value="${esc(s.linea||'')}" placeholder="Ej: L1 (opcional: para el Perfil 2D)"></label>
   <label class="f">Arreglo de electrodos<select id="edArreglo">${Object.entries(ARREGLOS).map(([k,v])=>`<option value="${k}"${(s.arreglo||'schlum')===k?' selected':''}>${v}</option>`).join('')}</select></label>
@@ -441,7 +446,7 @@ function guardarEd(){
   if(V.nuevo){const tpl=TPL[g('edTpl')]||[];
     const s=Object.assign({id:uid(),filas:tpl.map(([ab,mn])=>fila({ab,mn}))},base);
     S.sondeos.unshift(s);saveNow();go({view:'sondeo',sid:s.id,tab:'medidas',nuevo:false});toast('Sondeo creado')}
-  else{const s=cur();Object.assign(s,base);s.ejemplo=false;saveNow();go({view:V.volverLista?'lista':'sondeo',volverLista:false});toast('Datos guardados')}}
+  else{const s=cur(),prevAlt=s.alt;Object.assign(s,base);if(num(s.alt)!==num(prevAlt))s.altAuto=false;s.ejemplo=false;saveNow();go({view:V.volverLista?'lista':'sondeo',volverLista:false});toast('Datos guardados')}}
 
 /* ---------- sondeo ---------- */
 const TABS={medidas:'Medidas',curva:'Curva',capas:'Capas',pozo:'Pozo',sitio:'Sitio',archivos:'Archivos'};
@@ -505,11 +510,15 @@ function vMedida(){
     :s.modo==='r'?`<ol><li>Anota la resistencia R que muestra el equipo (ΔV/I, en ohmios).</li><li>La ρa sale sola: ρa = K × R.</li><li>Toca <b>Siguiente</b> o Enter.</li></ol>`:`<ol><li>Escribe la resistividad aparente ya calculada.</li><li>Toca <b>Siguiente</b> o Enter.</li></ol>`;
   return barra(`Medida ${i+1} de ${tot}`,s.nombre,true)+`<main>
   <div class="progress" aria-hidden="true"><i style="width:${(i+1)/tot*100}%"></i></div>
-  ${ayuda(help)}
+  ${ayuda(help+'<p><b>Terreno inclinado (opcional)</b>: si A o B quedan más arriba o más abajo que el centro, abre <b>Altura de los electrodos A y B</b> y escribe la altitud de cada uno (m s.n.m.). M y N se toman a la altitud del centro del sondeo, que se escribe en los datos del sondeo o se trae con las coordenadas. La app calcula K con la distancia real entre electrodos, así que la ρa cambia un poco. Mide AB/2 con la cinta sobre el terreno. Si el terreno es muy inclinado (más del 10 % de la apertura), la app avisa: el relieve también distorsiona la corriente y el resultado se toma con reserva. Si no escribes alturas, el cálculo es el de siempre, con terreno plano.</p>')}
   ${emp?`<div class="note info"><b>Empalme:</b> esta AB/2 se mide dos veces, una con cada MN. ${empMsg(s,i)}</div>`:''}
   <section class="card" style="display:flex;flex-direction:column;gap:12px">
     <div class="grid2"><label class="f">AB/2 (m)<input id="inAB" inputmode="decimal" value="${fmtg(f.ab)}"></label>
     <label class="f">MN (m)<input id="inMN" inputmode="decimal" value="${fmtg(f.mn)}"></label></div>
+    <details${f.hA!=null||f.hB!=null?' open':''}><summary class="small"><b>Altura de los electrodos A y B</b> (opcional, si el terreno no es plano)</summary>
+      <div class="grid2" style="margin-top:8px"><label class="f">Altitud de A (m s.n.m.)<input id="inHA" inputmode="decimal" value="${fmtg(f.hA)}"></label>
+      <label class="f">Altitud de B (m s.n.m.)<input id="inHB" inputmode="decimal" value="${fmtg(f.hB)}"></label></div>
+      <div class="small muted" style="margin-top:6px">M y N se toman a la altitud del centro del sondeo (la de las coordenadas). Con esto la app calcula K con la distancia real entre electrodos. Mide AB/2 sobre el terreno, con la cinta. Necesita la altitud del sondeo.</div></details>
     ${inputs}
   </section>
   <section class="card" style="display:flex;flex-direction:column;gap:8px">
@@ -566,6 +575,8 @@ function actualizarRes(){
    <div class="num">${p==null?'—':fmt(p)} <span class="unit">Ω·m</span></div>
    <div class="k">K = ${k==null?'—':fmt(k,2)} m${s.modo==='iv'&&dvProm(f)!=null?` · ΔV prom = ${fmt(dvProm(f),2)} mV`:''}</div>`;
   const av=[];const ab=num(f.ab),mn=num(f.mn);
+  if((num(f.hA)!=null||num(f.hB)!=null)&&num(s.alt)==null)av.push('Anotaste la altura de A o B, pero el sondeo no tiene altitud. Ponla en los datos del sondeo (o tráela con las coordenadas) para que cuente en el cálculo.');
+  else{const z=zRel(s,f);if(z&&ab>0){const p=Math.max(Math.abs(z.zA),Math.abs(z.zB))/ab*100;if(p>10)av.push(`El terreno es inclinado (hasta ${fmt(p,0)} % de la apertura). El K ya usa la distancia real, pero el relieve también distorsiona la corriente: toma el resultado con reserva y, si puedes, ubica la línea sobre terreno más plano.`)}}
   if(ab!=null&&mn!=null&&k==null)av.push('Revisa AB/2 y MN: AB/2 tiene que ser mayor que la mitad de MN.');
   else if(ab!=null&&mn!=null&&mn>0.4*ab)av.push(`MN es grande para esta AB/2 (debería ser máximo ${fmt(0.4*ab,1)} m). La lectura puede salir distorsionada.`);
   if(s.modo==='iv'){const a=num(f.dv1),b=num(f.dv2),sp=num(f.sp);
@@ -809,7 +820,7 @@ function svgPerfil(D,usaAlt,modo){
   if(modo==='sec'&&col.length>1){let sec='';const nx=64,nz=60;for(let i=0;i<nx;i++){const x0=xMin+span*i/nx,x1=xMin+span*(i+1)/nx,xm=(x0+x1)/2;
       for(let k=0;k<nz;k++){const z0=top-(top-bot)*k/nz,z1=top-(top-bot)*(k+1)/nz,zm=(z0+z1)/2,r=rhoInterp(D,xm,usaAlt?zm:-zm,usaAlt);if(r==null)continue;
         const c=colorRho(D.tC(r));sec+=`<rect x="${X(x0).toFixed(1)}" y="${Y(z0).toFixed(1)}" width="${(X(x1)-X(x0)+0.8).toFixed(1)}" height="${(Y(z1)-Y(z0)+0.8).toFixed(1)}" fill="${c.rgb}"/>`}}g+=`<g opacity=".62">${sec}</g>`}
-  for(let z=Math.ceil(bot/step)*step;z<=top+1e-9;z+=step){const y=Y(z);g+=`<line x1="${L}" x2="${L+w}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width=".6"/><text x="${L-6}" y="${y+3.5}" font-size="10.5" text-anchor="end" fill="var(--muted)">${fmtg(+Math.abs(z).toPrecision(4))}</text>`}
+  for(let z=Math.ceil(bot/step)*step;z<=top+1e-9;z+=step){const y=Y(z);g+=`<line x1="${L}" x2="${L+w}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width=".6"/><text x="${L-6}" y="${y+3.5}" font-size="10.5" text-anchor="end" fill="var(--muted)">${fmtg(+(usaAlt?z:Math.abs(z)).toPrecision(4))}</text>`}
   // líneas de correlación (si los vecinos tienen el mismo número de capas)
   for(let k=1;k<col.length;k++){const a=col[k-1],b=col[k];if(a.s.modelo.rho.length!==b.s.modelo.rho.length)continue;const ta=espesores(a.s.modelo),tb=espesores(b.s.modelo),za=usaAlt?(num(a.s.alt)||0):0,zb=usaAlt?(num(b.s.alt)||0):0;
     ta.forEach((t,i)=>{g+=`<line x1="${(X(a.x)+cw/2).toFixed(1)}" y1="${Y(za-t).toFixed(1)}" x2="${(X(b.x)-cw/2).toFixed(1)}" y2="${Y(zb-tb[i]).toFixed(1)}" stroke="var(--ink)" stroke-width=".9" stroke-dasharray="4 3"/>`})}
@@ -821,22 +832,47 @@ function svgPerfil(D,usaAlt,modo){
     const nm=o.s.nombre.length>12?o.s.nombre.slice(0,11)+'…':o.s.nombre;
     g+=`<path d="M${(X(o.x)-6).toFixed(1)} ${T-20} L${(X(o.x)+6).toFixed(1)} ${T-20} L${X(o.x).toFixed(1)} ${T-10} Z" fill="${o.c}"/><text x="${X(o.x).toFixed(1)}" y="${T-25}" font-size="10" font-weight="700" text-anchor="middle" fill="${o.c}">${esc(nm)}</text>`;
     if(col.length>1)g+=`<text x="${X(o.x).toFixed(1)}" y="${T+h+14}" font-size="10" text-anchor="middle" fill="var(--muted)">${fmtg(o.x)}${o.auto?'*':''}</text>`}
+  if(usaAlt&&col.length>1)g+=`<polyline points="${col.map(o=>X(o.x).toFixed(1)+','+Y(num(o.s.alt)||0).toFixed(1)).join(' ')}" fill="none" stroke="#8B5A2B" stroke-width="2.6" stroke-linejoin="round"/>`;
   let bar='';const bw=w-110,by=H-24;for(let k=0;k<40;k++){bar+=`<rect x="${(L+30+bw*k/40).toFixed(1)}" y="${by}" width="${(bw/40+0.5).toFixed(1)}" height="10" fill="${colorRho(k/39).rgb}"/>`}
   bar+=`<text x="${L+26}" y="${by+9}" font-size="10" text-anchor="end" fill="var(--muted)">${labLog(+D.rmin.toPrecision(2))}</text><text x="${L+34+bw}" y="${by+9}" font-size="10" fill="var(--muted)">${labLog(+D.rmax.toPrecision(2))} Ω·m</text>`;
   return`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Corte de resistividades del perfil">
     <rect x="${L}" y="${T}" width="${w}" height="${h}" fill="var(--surface)" stroke="var(--muted)"/>${g}${bar}
     <text x="4" y="14" font-size="11" fill="var(--muted)">${usaAlt?'Cota (m s.n.m.)':'Profundidad (m)'}</text>
     ${col.length>1?`<text x="${L+w/2}" y="${T+h+30}" font-size="11" text-anchor="middle" fill="var(--muted)">Posición X sobre la línea (m)</text>`:''}</svg>`}
+/** Eje vertical del perfil: si el usuario no eligió, usa altitud cuando los sondeos la tienen (así se ve el relieve). */
+function ejePerfil(D){if(V.eje==='alt'||V.eje==='prof')return V.eje;return D&&D.col.some(o=>num(o.s.alt)!=null)?'alt':'prof'}
+/** Franja con el perfil del terreno a escala vertical ampliada: el relieve de unos pocos metros no se ve en la sección, que llega a 100 m. */
+function datosTerreno(D){const col=D.col.filter(o=>num(o.s.alt)!=null);if(col.length<2)return null;
+  const al=col.map(o=>num(o.s.alt)),mn=Math.min(...al),mx=Math.max(...al),pad=Math.max(0.5,(mx-mn)*0.25),lo=mn-pad,hi=mx+pad,xMin=col[0].x,xMax=col[col.length-1].x,span=Math.max(1,xMax-xMin);
+  const desn=num(col[col.length-1].s.alt)-num(col[0].s.alt);return{col,mn,mx,lo,hi,xMin,xMax,span,desn,pend:desn/span*100}}
+function svgTerreno(T0){const W=360,H=150,L=46,R=14,T=24,B=34,w=W-L-R,h=H-T-B,{col,lo,hi,xMin,span}=T0,X=x=>L+w*(x-xMin)/span,Y=z=>T+h*(hi-z)/(hi-lo);
+  let g='';for(let k=0;k<=4;k++){const z=lo+(hi-lo)*k/4,y=Y(z);g+=`<line x1="${L}" x2="${L+w}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width=".6"/><text x="${L-6}" y="${(y+3.5).toFixed(1)}" font-size="10.5" text-anchor="end" fill="var(--muted)">${fmtg(+z.toFixed(1))}</text>`}
+  const pts=col.map(o=>`${X(o.x).toFixed(1)},${Y(num(o.s.alt)).toFixed(1)}`);
+  g+=`<polygon points="${X(col[0].x).toFixed(1)},${T+h} ${pts.join(' ')} ${X(col[col.length-1].x).toFixed(1)},${T+h}" fill="#8B5A2B" opacity=".18"/><polyline points="${pts.join(' ')}" fill="none" stroke="#8B5A2B" stroke-width="2.6" stroke-linejoin="round"/>`;
+  for(const o of col){const x=X(o.x),y=Y(num(o.s.alt)),nm=o.s.nombre.length>12?o.s.nombre.slice(0,11)+'…':o.s.nombre,an=o===col[0]?'start':o===col[col.length-1]?'end':'middle',xt=o===col[0]?x+4:o===col[col.length-1]?x-4:x;
+    g+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${o.c}" stroke="var(--surface)" stroke-width="1.2"/><text x="${xt.toFixed(1)}" y="${(y-9).toFixed(1)}" font-size="10" text-anchor="${an}" font-weight="700" fill="${o.c}">${esc(nm)}</text><text x="${x.toFixed(1)}" y="${T+h+14}" font-size="10" text-anchor="middle" fill="var(--muted)">${fmtg(o.x)}</text>`}
+  return`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Perfil del terreno"><rect x="${L}" y="${T}" width="${w}" height="${h}" fill="var(--surface)" stroke="var(--muted)"/>${g}
+    <text x="4" y="14" font-size="11" fill="var(--muted)">Cota del terreno (m s.n.m.)</text><text x="${L+w/2}" y="${H-4}" font-size="11" text-anchor="middle" fill="var(--muted)">Posición X sobre la línea (m)</text></svg>`}
+async function altLinea(){const D=datosPerfil(V.linea==='__todas'?null:V.linea);if(!D)return;const falt=D.col.filter(o=>num(o.s.alt)==null&&tieneXY(o.s));let ok=0;toast('Trayendo altitudes…');
+  for(const o of falt){if(await traerAltitud(o.s,true))ok++}
+  render();toast(ok?`Altitud traída para ${ok} de ${falt.length} sondeo(s). Es aproximada: corrígela a mano si la mediste.`:'No se pudo traer la altitud. Revisa la señal.')}
+function cardTerreno(D,usaAlt){const T0=datosTerreno(D),sinAlt=D.col.filter(o=>num(o.s.alt)==null),conXY=sinAlt.filter(o=>tieneXY(o.s));
+  const aviso=sinAlt.length?`<div class="note info small" style="display:flex;flex-direction:column;gap:6px">Para ver el relieve, cada sondeo necesita su <b>altitud</b> (${sinAlt.map(o=>esc(o.s.nombre)).join(', ')} no ${sinAlt.length>1?'la tienen':'la tiene'}). Escríbela en ✎ Datos del sondeo${conXY.length?' o tráela con las coordenadas (necesita internet)':''}.${conXY.length?'<button class="btn sm" data-a="altLinea">📡 Traer la altitud de los sondeos con coordenadas</button>':''}</div>`:'';
+  if(!T0)return aviso?`<section class="card" style="display:flex;flex-direction:column;gap:8px"><b>⛰ Relieve del terreno</b>${aviso}</section>`:'';
+  return `<section class="card" style="display:flex;flex-direction:column;gap:8px"><b>⛰ Perfil del terreno</b>${svgTerreno(T0)}
+   <div class="small">Desnivel entre los extremos: <b>${fmt(Math.abs(T0.desn),1)} m</b> ${T0.desn>=0?'(sube':'(baja'} en ${fmtg(T0.span)} m de línea, pendiente media de <b>${fmt(Math.abs(T0.pend),1)} %</b>).</div>
+   <div class="small muted">Esta franja está a escala vertical ampliada para que se vea el relieve. En la sección de arriba, con ${fmtg(Math.round(D.dmax))} m de profundidad, unos pocos metros de desnivel casi no se notan.${usaAlt?'':' Cambia el eje a <b>Altitud</b> para ver la sección sobre el terreno.'}</div>${aviso}</section>`}
 function vPerfil(){
   const help=ayuda(`<ol><li>Mide varios SEV sobre una misma <b>línea</b> recta (por ejemplo uno cada 40 m), con A y B siempre a lo largo de la línea.</li>
     <li>En cada sondeo toca <b>✎ Datos</b> y escribe la <b>Línea</b> (L1, L2…) y su <b>Posición X</b> (distancia desde la estaca 0). Si los mides con el equipo digital, ya llegan con esos datos.</li>
     <li>Haz las capas de cada sondeo (pestaña <b>Capas</b> → Automático).</li>
-    <li>Aquí escoge la línea. <b>Columnas</b>: cada SEV con su color y las capas unidas con líneas punteadas. <b>Sección</b>: además rellena entre los SEV para ver el corte continuo.</li></ol>
+    <li>Aquí escoge la línea. <b>Columnas</b>: cada SEV con su color y las capas unidas con líneas punteadas. <b>Sección</b>: además rellena entre los SEV para ver el corte continuo.</li>
+    <li><b>Relieve del terreno</b>: si los sondeos tienen <b>altitud</b> (✎ Datos del sondeo, o el botón <b>Traer la altitud de los sondeos con coordenadas</b>, con internet), el perfil se dibuja sobre el terreno, con una línea café que une los sondeos. Debajo aparece el <b>Perfil del terreno</b> con la escala vertical ampliada y el desnivel y la pendiente de la línea. Con el eje <b>Profundidad</b> el corte se ve como si el terreno fuera plano; con <b>Altitud</b>, sobre el relieve.</li></ol>
     <p>Entre dos SEV la app supone que las capas cambian de forma suave: algo angosto (una falla, un lente) que quede entre dos SEV no se ve. Las líneas punteadas solo se dibujan entre SEV con el mismo número de capas.</p>`);
   const ls=lineasPerfil();
   if(!ls.length)return barra('Perfil 2D','Corte con varios SEV',true)+`<main>${help}<div class="note info">Todavía no hay sondeos con capas. Abre un sondeo, ve a <b>Capas</b> y toca <b>Automático</b>.</div></main>`;
   if(V.linea==null||(V.linea!=='__todas'&&!ls.includes(V.linea)))V.linea=ls[0];
-  const lin=V.linea==='__todas'?null:V.linea,D=datosPerfil(lin),usaAlt=V.eje==='alt',modo=V.pvista==='col'?'col':'sec';
+  const lin=V.linea==='__todas'?null:V.linea,D=datosPerfil(lin),usaAlt=ejePerfil(D)==='alt',modo=V.pvista==='col'?'col':'sec';
   const nom=l=>l===''?'Sin línea':l;
   const chips=(ls.length>1?[...ls.map(l=>[l,nom(l)]),['__todas','Todos']]:[[ls[0],nom(ls[0])]]).map(([v,t])=>`<button data-a="pLinea" data-v="${esc(v)}" aria-pressed="${V.linea===v}">${esc(t)}</button>`).join('');
   const filas=D.col.map(o=>{const zs=espesores(o.s.modelo);return`<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${o.c};margin-right:6px"></span>${esc(o.s.nombre)}</td><td>${fmtg(o.x)}${o.auto?'*':''}</td><td>${o.s.modelo.rho.length}</td><td>${fmt(zs[zs.length-1]||0,1)}</td></tr>`}).join('');
@@ -845,6 +881,7 @@ function vPerfil(){
     <div class="seg" role="group" aria-label="Vista"><button data-a="pVista" data-v="col" aria-pressed="${modo==='col'}">Columnas</button><button data-a="pVista" data-v="sec" aria-pressed="${modo==='sec'}">Sección</button></div>
     <div class="seg" role="group" aria-label="Eje vertical"><button data-a="eje" data-v="prof" aria-pressed="${!usaAlt}">Profundidad</button><button data-a="eje" data-v="alt" aria-pressed="${usaAlt}">Altitud</button></div>
     <section class="card">${svgPerfil(D,usaAlt,modo)}</section>
+    ${cardTerreno(D,usaAlt)}
     ${D.col.some(o=>o.auto)?'<p class="small muted">* SEV sin posición X (o repetida): se ubicó 50 m después del anterior. Pon su posición real en ✎ Datos del sondeo.</p>':''}
     <section class="card"><div class="tabla-wrap"><table class="datos"><thead><tr><th>SEV</th><th>X (m)</th><th>Capas</th><th>Prof. última capa (m)</th></tr></thead><tbody>${filas}</tbody></table></div></section>
     ${cardXcoords(lin)}<button class="btn primary" data-a="pPDF">Informe PDF del perfil</button></main>`}
@@ -857,7 +894,7 @@ function dibujoPerfil(P,D,y,usaAlt){const GRIS='#5E6B66';
     P.rect(X(x0),Y(z0),X(x1)-X(x0)+0.3,Y(z1)-Y(z0)+0.3,{fill:mezcla(hexRho(D.tC(r)),0.62)})}}}
   P.rect(L,T,w,h,{stroke:'#888888'});
   const step=(()=>{const r=(top-bot)/6,p=10**Math.floor(Math.log10(r));return [1,2,5,10].map(m=>m*p).find(v=>v>=r)})();
-  for(let z=Math.ceil(bot/step)*step;z<=top+1e-9;z+=step){P.line(L-4,Y(z),L,Y(z),{color:GRIS});P.text(L-7,Y(z)+3,fmtg(+Math.abs(z).toPrecision(4)),8,{align:'right',color:GRIS})}
+  for(let z=Math.ceil(bot/step)*step;z<=top+1e-9;z+=step){P.line(L-4,Y(z),L,Y(z),{color:GRIS});P.text(L-7,Y(z)+3,fmtg(+(usaAlt?z:Math.abs(z)).toPrecision(4)),8,{align:'right',color:GRIS})}
   P.text(40,T-8,usaAlt?'Cota (m)':'Prof. (m)',8,{color:GRIS});
   for(let k=1;k<col.length;k++){const a=col[k-1],b=col[k];if(a.s.modelo.rho.length!==b.s.modelo.rho.length)continue;const ta=espesores(a.s.modelo),tb=espesores(b.s.modelo),za=usaAlt?(num(a.s.alt)||0):0,zb=usaAlt?(num(b.s.alt)||0):0;
     ta.forEach((t,i)=>{const x1=X(a.x)+cw/2,y1=Y(za-t),x2=X(b.x)-cw/2,y2=Y(zb-tb[i]);for(let q=0;q<10;q+=2)P.line(x1+(x2-x1)*q/10,y1+(y2-y1)*q/10,x1+(x2-x1)*(q+1)/10,y1+(y2-y1)*(q+1)/10,{color:'#333333',w:0.7})})}
@@ -867,6 +904,7 @@ function dibujoPerfil(P,D,y,usaAlt){const GRIS='#5E6B66';
     P.rect(x,Y(z0),cw,Y(bot)-Y(z0),{stroke:o.c,w:1.6});
     P.text(X(o.x),T-14,o.s.nombre.slice(0,14),8,{bold:true,align:'center',color:o.c});
     if(col.length>1)P.text(X(o.x),T+h+11,fmtg(o.x)+(o.auto?'*':''),8,{align:'center',color:GRIS})}
+  if(usaAlt&&col.length>1)for(let k=1;k<col.length;k++){const a=col[k-1],b=col[k];P.line(X(a.x),Y(num(a.s.alt)||0),X(b.x),Y(num(b.s.alt)||0),{color:'#8B5A2B',w:2})}
   P.text(L+w/2,T+h+24,'Posición X sobre la línea (m)',8.5,{align:'center',color:GRIS});
   const by=T+h+36;for(let k=0;k<40;k++)P.rect(L+60+(w-120)*k/40,by,(w-120)/40+0.4,8,{fill:hexRho(k/39)});
   P.text(L+56,by+7,labLog(+D.rmin.toPrecision(2)),8,{align:'right',color:GRIS});P.text(L+w-56,by+7,labLog(+D.rmax.toPrecision(2))+' Ohm·m',8,{color:GRIS});
@@ -876,7 +914,16 @@ async function perfilPDF(lin){const D=datosPerfil(lin);if(!D)throw new Error('No
   P.rect(0,0,595,70,{fill:VERDE});P.text(40,32,'Perfil de SEV (sección 2D)',18,{bold:true,color:'#FFFFFF'});
   P.text(40,54,`${lin==null?'Todos los sondeos':'Línea '+(lin||'sin nombre')} · ${D.col.length} SEV · ${new Date().toLocaleDateString('es-CO')}`,10,{color:'#FFFFFF'});
   y=95;P.text(40,y,'Sección interpolada entre los SEV (cada recuadro de color es un SEV; entre ellos, valores interpolados)',9.5,{bold:true});y+=10;
-  y=dibujoPerfil(P,D,y,V.eje==='alt');const col=D.col;
+  y=dibujoPerfil(P,D,y,ejePerfil(D)==='alt');const col=D.col;
+  {const T0=datosTerreno(D);if(T0){/* franja del terreno a escala vertical ampliada */
+    if(y>560){P.page();y=40}
+    P.text(40,y,'Perfil del terreno (escala vertical ampliada)',11,{bold:true,color:VERDE});y+=8;
+    const L=70,w=470,h=95,top=y+6,X=x=>L+w*(x-T0.xMin)/T0.span,Y=z=>top+h*(T0.hi-z)/(T0.hi-T0.lo);
+    P.rect(L,top,w,h,{stroke:'#888888'});
+    for(let k=0;k<=4;k++){const z=T0.lo+(T0.hi-T0.lo)*k/4;P.line(L,Y(z),L+w,Y(z),{color:'#DDE3DF',w:0.4});P.text(L-5,Y(z)+3,fmtg(+z.toFixed(1)),8,{align:'right',color:GRIS})}
+    for(let k=1;k<T0.col.length;k++){const a=T0.col[k-1],b=T0.col[k];P.line(X(a.x),Y(num(a.s.alt)),X(b.x),Y(num(b.s.alt)),{color:'#8B5A2B',w:2})}
+    for(const o of T0.col){P.rect(X(o.x)-3,Y(num(o.s.alt))-3,6,6,{fill:o.c});P.text(X(o.x),Y(num(o.s.alt))-8,o.s.nombre.slice(0,14),7.5,{align:'center',bold:true,color:o.c});P.text(X(o.x),top+h+10,fmtg(o.x),8,{align:'center',color:GRIS})}
+    y=top+h+22;P.text(40,y,`Desnivel entre los extremos: ${fmt(Math.abs(T0.desn),1)} m ${T0.desn>=0?'(sube)':'(baja)'} en ${fmtg(T0.span)} m; pendiente media ${fmt(Math.abs(T0.pend),1)} %.`,8.5,{color:GRIS});y+=18}}
   P.text(40,y,'Sondeos del perfil',11,{bold:true,color:VERDE});y+=10;
   const cols=[['SEV',150],['Línea',60],['X (m)',55],['Altitud',60],['Capas',50],['Resistividades (Ohm·m) / espesores (m)',140]];
   let x=40;P.rect(40,y,515,16,{fill:'#E4EFEB'});for(const [t,wd] of cols){P.text(x+4,y+11,t,8,{bold:true});x+=wd}y+=16;
@@ -896,7 +943,17 @@ function cargarEstudios(){let n=0,c=0;for(const o of ESTUDIOS){const ex=S.sondeo
    Schlumberger con AB/2 = L (distancia de A al centro de MN), así que la inversión no cambia; solo K se duplica. */
 const ARREGLOS={schlum:'Schlumberger (A y B simétricos)',semi:'Semi-Schlumberger (B fijo muy lejos, solo se abre A)'};
 const esSemi=s=>!!s&&s.arreglo==='semi';
-function Ks(s,f){const k=K(f.ab,f.mn);return k==null?null:k*(esSemi(s)?2:1)}
+/** Alturas de A y B respecto al centro (m). Se escriben como altitud (m s.n.m.); M y N se toman a la altitud del centro del sondeo (la de las coordenadas). */
+function zRel(s,f){const c=num(s.alt),a=num(f.hA),b=num(f.hB);if(c==null||(a==null&&b==null))return null;return{zA:a==null?0:a-c,zB:b==null?0:b-c}}
+/** K con la geometría real: A y B a su altura, M y N a la altura del centro. AB/2 se supone medido sobre el terreno (con cinta). */
+function K3D(L,mn,zA,zB,semi){const a=mn/2,dA=Math.sqrt(Math.max(L*L-zA*zA,0)),dB=Math.sqrt(Math.max(L*L-zB*zB,0));
+  if(dA<=a||(!semi&&dB<=a))return null;
+  const AM=Math.hypot(dA-a,zA),AN=Math.hypot(dA+a,zA);
+  if(semi){const d=1/AM-1/AN;return d>0?2*Math.PI/d:null}
+  const BM=Math.hypot(dB+a,zB),BN=Math.hypot(dB-a,zB),d=1/AM-1/BM-1/AN+1/BN;return d>0?2*Math.PI/d:null}
+function Ks(s,f){const k=K(f.ab,f.mn);if(k==null)return null;const semi=esSemi(s),z=zRel(s,f);
+  if(z&&(z.zA||z.zB)){const k3=K3D(num(f.ab),num(f.mn),z.zA,z.zB,semi);if(k3!=null)return k3}
+  return k*(semi?2:1)}
 function maxAB(s){return Math.max(0,...s.filas.map(f=>num(f.ab)||0))}
 function avisoArreglo(s){if(!esSemi(s))return'';const L=maxAB(s),b=num(s.distB);
   if(!(b>0))return`<div class="note warn small"><b>Semi-Schlumberger:</b> anota en <b>Editar</b> la distancia del centro al electrodo B. Debe ser al menos 5 a 10 veces el AB/2 más abierto${L?` (aquí, ${fmtg(5*L)} m o más)`:''}.</div>`;
@@ -1054,7 +1111,19 @@ function vGuia(){
    <li><b>"Automático da capas absurdas"</b> (miles de Ω·m, error alto): la curva tiene puntos malos o efectos laterales. Revisa la curva y quita o repite los puntos sueltos.</li>
    <li><b>"Las dos polaridades no coinciden"</b>: contacto malo en M o N, o potencial natural cambiando. Moja los electrodos y repite.</li>
    <li><b>"No llega señal"</b>: algún cable suelto, o un electrodo sin contacto. Revisa la corriente: si es casi cero, el problema está en A o B.</li></ul>`),
-  CAP('glos','14. Palabras clave',`<ul><li><b>AB/2</b>: distancia del centro a cada electrodo de corriente.</li><li><b>MN</b>: distancia entre los electrodos de potencial.</li>
+  CAP('nov','14. Novedades de esta versión',`<ul>
+   <li><b>Copiar un sondeo</b>: en la lista, el botón <b>📦 Copiar</b> guarda el sondeo en un archivo. Luego lo cargas en otro equipo con <b>Importar</b>.</li>
+   <li><b>Imagen satelital</b> (pestaña Archivos del estudio, fotos): con internet toca <b>Traer satelital automática</b>. Si el estudio apuntaba a sondeos borrados o reimportados, la app los vuelve a buscar por la línea. Si dice que faltan coordenadas, escríbelas en la pestaña <b>Sitio</b> de cada sondeo.</li>
+   <li><b>Geología del SGC e hidrogeología del sitio</b>: en <b>Sitio</b>, con coordenadas e internet, toca <b>Traer geología del SGC</b>. Queda guardada y sirve sin señal. El informe agrega el bloque <b>Hidrogeología del sitio</b>, que dice qué tipo de roca hay en el punto, su potencial para agua y su calidad probable. Es una estimación general por tipo de roca: no reemplaza un estudio hidrogeológico ni una prueba de bombeo. Las provincias del Estudio Nacional del Agua quedan como contexto regional.</li>
+   <li><b>Un solo mapa para sondeos cercanos</b>: si varios sondeos están a menos de 1 km, el informe muestra un solo mapa geológico y dice cuáles cubre. Un sondeo lejano lleva su propio mapa y su propio párrafo.</li>
+   <li><b>Nombre del proyecto automático</b>: si no lo escribes tú, sale de los sondeos que marcaste en las casillas del informe. Si lo escribes, la app respeta tu texto (borra el texto para volver al automático).</li>
+   <li><b>Informe con varios sondeos</b>: cada sondeo lleva su lectura y su consejo; hay una <b>tabla comparativa</b> y la recomendación final nombra el <b>sondeo recomendado</b> con su razón (capa con agua más gruesa y mejor ajuste). Es un criterio de la app, no una orden.</li>
+   <li><b>Altitud automática</b>: en los datos del sondeo, con coordenadas e internet, toca <b>Traer altitud con las coordenadas</b>. Es aproximada (modelo de terreno de unos 30 m); corrígela a mano si la mediste. Se envían las coordenadas a un servicio externo de elevación (Open-Meteo).</li>
+   <li><b>Altura de los electrodos A y B</b>: en cada medida, abre <b>Altura de los electrodos A y B</b> y escribe su altitud. M y N se toman a la altitud del centro del sondeo. Mide AB/2 sobre el terreno, con la cinta. La app calcula K con la distancia real entre electrodos y avisa si el terreno es muy inclinado. Necesita la altitud del sondeo.</li>
+   <li><b>Logo más grande</b> en la portada del informe.</li>
+   <li><b>Respaldo con aviso</b>: la pantalla principal muestra cuándo fue el último respaldo y una franja <b>Respaldo pendiente</b> si hay cambios sin respaldar. El archivo lleva fecha y hora, y se manda con <b>Compartir</b> (Gmail, Drive, WhatsApp). Al importar un respaldo, también vuelven los estudios (las fotos no).</li>
+   <li><b>Perfil 2D con relieve</b>: si los sondeos tienen altitud, el perfil se dibuja sobre el terreno, con una línea café, y debajo sale el <b>Perfil del terreno</b> con escala vertical ampliada, el desnivel y la pendiente. El PDF del perfil también lo trae. El botón <b>Traer la altitud de los sondeos con coordenadas</b> llena las que falten, con internet.</li></ul>`),
+  CAP('glos','15. Palabras clave',`<ul><li><b>AB/2</b>: distancia del centro a cada electrodo de corriente.</li><li><b>MN</b>: distancia entre los electrodos de potencial.</li>
    <li><b>K</b>: factor de la geometría; corrige la distancia. K = π·((AB/2)² − (MN/2)²) ÷ MN.</li><li><b>ρa</b>: resistividad aparente = K × ΔV ÷ I (Ω·m).</li>
    <li><b>Empalme</b>: repetir una AB/2 con dos MN distintos.</li><li><b>SP</b>: potencial natural del suelo, que se resta.</li>
    <li><b>RMS</b>: error promedio entre la curva medida y la del modelo.</li><li><b>Equivalencia</b>: modelos distintos que dan la misma curva.</li>
@@ -1151,6 +1220,14 @@ function fechaLarga(f){const m=String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})/);r
 const claveEst=s=>s.linea?'L:'+s.linea:'S:'+s.id;
 const estActual=()=>S.informes[V.est];
 const sevsDe=E=>(E?E.sevs:[]).map(id=>S.sondeos.find(s=>s.id===id)).filter(Boolean);
+/** Nombre del predio/proyecto: si el usuario no lo escribió a mano, sale de los sondeos marcados en las casillas. */
+const baseTit=x=>(x.lugar||'').split('.')[0].trim()||x.nombre;
+function tituloEst(E,sevs){if(E.tituloMan)return E.titulo||'Estudio SEV';
+  if(E.titulo&&!S.sondeos.some(x=>baseTit(x)===E.titulo))return E.titulo; /* estudio viejo con título escrito a mano */
+  const v=(sevs||sevsDe(E));if(!v.length)return E.titulo||'Estudio SEV';
+  const t=[...new Set(v.map(baseTit))];
+  if(t.length===1)return t[0];
+  const n=v.map(x=>x.nombre);return n.slice(0,-1).join(', ')+' y '+n[n.length-1]}
 function abrirEstudio(s){const k=claveEst(s);
   if(!S.informes[k]){const L=s.linea?S.sondeos.filter(x=>x.linea===s.linea).sort((a,b)=>(num(a.x)??0)-(num(b.x)??0)):[s];
     S.informes[k]={titulo:(s.lugar||'').split('.')[0]||s.nombre,cliente:'',fecha:s.fecha||today(),linea:s.linea||'',sevs:L.map(x=>x.id),fotos:[],intro:'',concl:'',recom:'',borrador:false,objetivo:{uso:'',cuanta:'',prof:''},pozos:[],pasos:{}};saveNow()}
@@ -1179,6 +1256,12 @@ function paquete(c){// capas favorables seguidas, por debajo de 1,5 m, dentro de
       if(bot-top<=0)continue;if(act&&Math.abs(act.botReal-l.top)<1e-6){act.bot=bot;act.botReal=l.bot;act.capas.push(l)}else{act={top,bot,botReal:l.bot,capas:[l]}}
       act.esp=act.bot-act.top;if(!best||act.esp>best.esp)best=act}else act=null}
   return best&&best.esp>=2?best:null}
+/** Valoración de cada sondeo para la tabla comparativa del informe. */
+function valoracionSevs(sevs){const C=sevs.map(capasSEV).filter(Boolean);for(const c of C)c.P=paquete(c);
+  const cand=C.filter(c=>c.P).sort((a,b)=>b.P.esp-a.P.esp||a.rms-b.rms);
+  return C.map(c=>{const mal=c.rms>10||c.n<8;let v;
+    if(!c.P)v='Sin zona clara';else if(c===cand[0])v=mal?'Mejor, pero repetir':'Recomendado';else v=mal?'Repetir':'Alternativa';
+    return{c,v}})}
 function sugerencias(sevs,E){const C=sevs.map(capasSEV).filter(Boolean),F=S.opciones.firma,concl=[],recom=[];
   if(!C.length)return{concl:'Ningún sondeo tiene todavía modelo de capas. Calcula las capas (pestaña Capas) y vuelve a generar las sugerencias.',recom:''};
   const ab=Math.max(...C.map(c=>c.abmax)),arr=sevs.some(s=>typeof esSemi==='function'&&esSemi(s))?'semi-Schlumberger':'Schlumberger';
@@ -1192,6 +1275,7 @@ function sugerencias(sevs,E){const C=sevs.map(capasSEV).filter(Boolean),F=S.opci
     const sal=c.L.find(l=>l.cl==='salobre'&&l.top>1.5&&l.top<c.zmax);if(sal)t+=` Desde ${m1(sal.top)} m aparece una capa muy conductora (${m1(sal.r)} Ω·m), que puede ser arcilla o agua salobre.`;
     const roc=c.L.find(l=>l.cl==='roca'&&l.top>1.5&&l.top<c.zmax);if(roc)t+=` A partir de ${m1(roc.top)} m el material es muy resistivo (${fmt(roc.r,0)} Ω·m): probablemente roca o material seco.`;
     if(c.n<8)t+=` Tiene solo ${c.n} medidas útiles: conviene repetirlo con más aperturas.`;
+    {const mal=c.rms>10||c.n<8;t+=!P?' Consejo: con este sondeo no se recomienda perforar.':mal?' Consejo: repetirlo, con más medidas o mejor ajuste, antes de decidir.':' Consejo: sirve para ubicar el pozo.'}
     concl.push(t)}
   const cand=C.filter(c=>c.P).sort((a,b)=>b.P.esp-a.P.esp||a.rms-b.rms),b=cand[0];
   if(C.length>1&&b)concl.push(`El sondeo con mejor perspectiva es el ${b.s.nombre}, que muestra el paquete favorable más espeso (unos ${fmt(b.P.esp,0)} m dentro de lo interpretable).`);
@@ -1202,6 +1286,7 @@ function sugerencias(sevs,E){const C=sevs.map(capasSEV).filter(Boolean),F=S.opci
     if(roc&&roc.top<=zlim){prof=Math.max(6,Math.ceil(roc.top));nota=`, sin entrar en la capa de ${fmt(roc.r,0)} Ω·m que empieza a ${m1(roc.top)} m (posible ${roc.cl==='salobre'?'agua salobre':'roca o material seco'})`}
     else if(isFinite(b.P.botReal)&&b.P.botReal<=zlim){prof=Math.max(6,Math.ceil(b.P.botReal))}
     else{abierto=true;prof=Math.floor(zlim)}
+    if(C.length>1){const o2=cand[1];recom.push(`Sondeo recomendado para trabajar: el ${b.s.nombre}. Razón: tiene la capa favorable para agua más gruesa (unos ${fmt(b.P.esp,0)} m${o2?', frente a unos '+fmt(o2.P.esp,0)+' m del '+o2.s.nombre:''}) y un ajuste de ${fmt(b.rms,1)} % con ${b.n} medidas útiles. Es un criterio de la app basado en el espesor de la capa favorable y en el ajuste; la decisión final es de quien perfora.`)}
     recom.push(`Perforar un pozo exploratorio en el sitio del ${b.s.nombre} (estaca del centro${xyOK(b.s)?', '+coordTexto(b.s):''}) hasta unos ${prof} m de profundidad${nota}. Esta profundidad llega hasta la base de la capa con agua sin pasarse de lo que el sondeo ve con seguridad (aproximadamente un tercio de la línea AB).`);
     if(abierto||(sigue&&!roc))recom.push(`El material favorable para agua parece seguir por debajo de ${fmt(Math.min(prof,zlim),0)} m. Si al perforar sigue saliendo arena o grava con agua, se puede bajar un poco más; para saber con certeza hasta dónde llega, antes conviene un SEV más largo en el mismo sitio (AB/2 de al menos ${Math.ceil((prof+10)/10)*10} m).`);
     {const op=E&&E.objetivo&&num(E.objetivo.prof);if(op){if(op>b.abmax*2/3)recom.push(`Querías explorar hasta ${fmtg(op)} m, pero estos sondeos solo ven con seguridad hasta unos ${fmt(b.abmax/2,0)}–${fmt(b.abmax*2/3,0)} m. Para llegar a ${fmtg(op)} m con confianza haría falta un SEV más largo (AB/2 de ${abMaxParaProf(op)[0]} a ${abMaxParaProf(op)[1]} m).`)}}
@@ -1220,10 +1305,15 @@ function sugerencias(sevs,E){const C=sevs.map(capasSEV).filter(Boolean),F=S.opci
 
 /* ---- vista ---- */
 function vEstudio(){const E=estActual();if(!E)return barra('Informe del estudio','',true)+'<main><p>No se encontró el estudio.</p></main>';
+  if(!E.tituloMan){const nt=tituloEst(E);if(nt!==E.titulo)E.titulo=nt}
   if(E.linea)autoRumbos(E.linea);
   const F=S.opciones.firma,sevs=sevsDe(E),faltan=E.fotos.filter(f=>!FOTO_URL[f.id]);if(faltan.length)cargarFotos(faltan);
   const inp=(k,t,ph='',src='est')=>`<label class="f">${t}<input data-${src}="${k}" value="${esc((src==='est'?E:F)[k]||'')}" placeholder="${esc(ph)}"></label>`;
-  const help=ayuda(`<ol><li>Elige los <b>sondeos</b> que entran en el informe (los de una misma línea ya vienen marcados).</li>
+  const help=ayuda(`<ol><li>Elige los <b>sondeos</b> que entran en el informe (los de una misma línea ya vienen marcados). Lo que marques aquí es lo que sale en el informe, en la portada y en las páginas de adentro.</li>
+    <li><b>Nombre del proyecto</b>: si no lo escribes, la app lo arma con los sondeos marcados (si son del mismo lugar usa ese lugar; si no, junta sus nombres) y se actualiza al cambiar las casillas. Si lo escribes tú, la app respeta tu texto; bórralo para volver al automático.</li>
+    <li><b>Traer satelital automática</b> (en las fotos, con internet): la app baja la imagen satelital con la ubicación de los sondeos, a partir de sus coordenadas. Si dice que faltan coordenadas, escríbelas en la pestaña Sitio de cada sondeo.</li>
+    <li>Con varios sondeos, el informe trae un párrafo y un <b>consejo</b> por cada uno, una <b>tabla comparativa</b> y, en las recomendaciones, el <b>sondeo recomendado</b> con su razón (la capa con agua más gruesa y el mejor ajuste). Es un criterio de la app: la decisión final es de quien perfora.</li>
+    <li><b>Mapa geológico del SGC</b>: los sondeos a menos de 1 km comparten un solo mapa (el pie de figura dice cuáles). Un sondeo lejano lleva su propio mapa y su párrafo. Para que salga, en la pestaña <b>Sitio</b> de cada sondeo toca antes <b>Traer geología del SGC</b>, con internet.</li>
     <li>Llena los <b>datos del informe</b>. Los de la empresa y quien firma se guardan para los próximos estudios.</li>
     <li>Toma las <b>fotos</b> con este mismo celular, en cada casilla. La imagen satelital y el mapa geológico son capturas de pantalla que eliges de la galería; en la satelital puedes <b>marcar los SEV</b>.</li>
     <li>Toca <b>Sugerir conclusiones y recomendaciones</b>: la app las escribe a partir de las capas. <b>Revísalas y corrígelas</b>: quien firma eres tú.</li>
@@ -1319,7 +1409,7 @@ async function estudioPDF(){if(BUSY)return;const E=estActual(),sevs=sevsDe(E);if
   BUSY=true;$('#layer').innerHTML=`<div class="modal"><div class="card" role="dialog" aria-modal="true" aria-label="Generando informe"><b>Generando el informe del estudio…</b><div id="progInf" class="small muted" aria-live="polite">Preparando las fotos…</div><div class="progress"><i style="width:100%;opacity:.5"></i></div></div></div>`;
   try{const fotos=[];for(const f of E.fotos){const r=await FDB.get(f.id);const u=r&&(r.ann||r.data);if(!u)continue;fotos.push(Object.assign({},f,{im:{bin:atob(u.split(',')[1]),w:f.w,h:f.h}}))}
     const F=S.opciones.firma,g=(!E.concl||!E.recom)?sugerencias(sevs,E):null;
-    const est=Object.assign({},F,{sevs,titulo:E.titulo||'Estudio SEV',cliente:E.cliente||'',fecha:E.fecha,linea:E.linea,intro:E.intro||introAuto(E,sevs),
+    const est=Object.assign({},F,{sevs,titulo:tituloEst(E,sevs),cliente:E.cliente||'',fecha:E.fecha,linea:E.linea,intro:E.intro||introAuto(Object.assign({},E,{titulo:tituloEst(E,sevs)}),sevs),
       concl:E.concl||g.concl,recom:E.recom||g.recom,borrador:E.borrador?'DOCUMENTO DE PRUEBA - BORRADOR':'',fotos,equipo:F.equipo||EQUIPO_DEF,sitio:sitioDe(sevs)});
     if(F.logo&&F.logo.indexOf('data:')===0){try{est.logoImg={bin:atob(F.logo.split(',')[1]),w:F.logow||120,h:F.logoh||80}}catch(e){}}
     const pdf=await informePDF(sevs[0],t=>{const el=$('#progInf');if(el)el.textContent=t},{estudio:est,equiv:S.opciones.equivPDF!==false});
@@ -1338,13 +1428,13 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t
 document.addEventListener('change',async e=>{const t=e.target;if(!t.dataset||V.view!=='estudio')return;const E=estActual();if(!E)return;const d=t.dataset;
   if(d.fcat){const files=[...t.files];t.value='';if(!files.length)return;toast('Agregando foto…');
     for(const f of files){try{await agregarFoto(E,d.fcat,f)}catch(err){toast('No se pudo agregar la foto: '+err.message)}}saveNow();render();return}
-  if(d.est){E[d.est]=t.value;saveNow();if(d.est==='titulo'||d.est==='fecha')render();return}
+  if(d.est){E[d.est]=t.value;if(d.est==='titulo')E.tituloMan=t.value.trim()!=='';saveNow();if(d.est==='titulo'||d.est==='fecha')render();return}
   if(d.logo!==undefined){const f=[...t.files];t.value='';if(f.length){try{const r=await comprimir(f[0],420);S.opciones.firma.logo=r.url;S.opciones.firma.logow=r.w;S.opciones.firma.logoh=r.h;saveNow();render();toast('Logo guardado')}catch(err){toast('No se pudo leer el logo: '+err.message)}}return}
   if(d.firma){S.opciones.firma[d.firma]=t.value;saveNow();return}
   if(d.estchk){E[d.estchk]=t.checked;saveNow();return}
   if(d.fdesc){const f=E.fotos.find(x=>x.id===d.fdesc);if(f){f.desc=t.value;saveNow()}return}
   if(d.rumbo){const s=S.sondeos.find(x=>x.id===d.rumbo);if(s){const v=t.value.trim()===''?null:num(t.value);s.rumbo=v==null?null:((v%360)+360)%360;saveNow()}return}
-  if(d.estsev){if(t.checked){if(!E.sevs.includes(d.estsev))E.sevs.push(d.estsev)}else E.sevs=E.sevs.filter(x=>x!==d.estsev);saveNow();render();return}});
+  if(d.estsev){if(t.checked){if(!E.sevs.includes(d.estsev))E.sevs.push(d.estsev)}else E.sevs=E.sevs.filter(x=>x!==d.estsev);if(!E.tituloMan)E.titulo=tituloEst(E);saveNow();render();return}});
 
 /* ---------- geología del SGC embebida (offline) ---------- */
 /* Zonas con contexto geológico regional. bbox = [latMin,lonMin,latMax,lonMax].
@@ -1446,7 +1536,7 @@ async function buscarGeoSGC(s){if(!tieneXY(s)){toast('Primero pon las coordenada
     const g={sym:p.sym,desc:p.desc,edad:p.edad,form:p.form,muni:p.muni,fecha:new Date().toLocaleDateString('es-CO'),lat:+s.lat,lon:+s.lon};
     // intento de guardar el mapa (puede fallar según el navegador: no es crítico)
     try{const r=await fetch(sgcMapaURL(+s.lat,+s.lon,1000,916));if(r.ok){const bl=await r.blob();g.imw=1000;g.imh=916;const u0=await new Promise((ok,ko)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=ko;fr.readAsDataURL(bl)});g.img=await marcarCentro(u0)}}catch(e){g.img=''}
-    s.geoSGC=g;autoSitio(s,p.muni);V.sgcCargando=null;saveNow();render();
+    s.geoSGC=g;autoSitio(s,p.muni);if(num(s.alt)==null)await traerAltitud(s,true);V.sgcCargando=null;saveNow();render();
     toast(p.sym?('SGC: '+p.sym+(p.form?' · '+p.form:'')):'El SGC respondió, pero sin unidad en ese punto (¿mar o fuera de Colombia?)')}
   catch(e){V.sgcCargando=null;render();toast('No se pudo conectar al SGC. Revisa la señal e intenta otra vez.')}}
 function cardGeoSGC(s){if(!tieneXY(s))return '';const g=s.geoSGC,cargando=V.sgcCargando===s.id;
@@ -1468,6 +1558,15 @@ function cardGeoSGC(s){if(!tieneXY(s))return '';const g=s.geoSGC,cargando=V.sgcC
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const s=cur();if(!s)return;
   if(t.dataset.a==='sgcBuscar'){buscarGeoSGC(s);return}
   if(t.dataset.a==='sgcBorrar'){s.geoSGC=null;saveNow();render();return}});
+
+/* ---------- altitud automática desde las coordenadas (necesita internet; queda guardada) ---------- */
+async function traerAltitud(s,silencioso){if(!tieneXY(s)){if(!silencioso)toast('Primero pon las coordenadas del sondeo');return false}
+  if(navigator.onLine===false){if(!silencioso)toast('Necesitas señal (internet) para traer la altitud');return false}
+  try{const r=await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${(+s.lat).toFixed(6)}&longitude=${(+s.lon).toFixed(6)}`);
+    const d=await r.json(),e=d&&d.elevation&&d.elevation[0];if(typeof e!=='number'||!isFinite(e))throw new Error('sin dato');
+    s.alt=Math.round(e);s.altAuto=true;saveNow();const el=$('#edAlt');if(el)el.value=String(s.alt);if(!silencioso)toast('Altitud aproximada: '+s.alt+' m s.n.m. Puedes corregirla a mano si la mediste.');return true}
+  catch(e){if(!silencioso)toast('No se pudo traer la altitud. Revisa la señal e intenta otra vez.');return false}}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-a="altAuto"]');if(!t)return;const s=cur();if(s)traerAltitud(s)});
 
 /* ---------- potencial de agua según la roca del punto (se calcula sin internet con lo que ya se guardó del SGC) ---------- */
 const HIDRO_CLASES={
@@ -1708,7 +1807,7 @@ function leerImport(texto,archivo=''){
   if(!t)return{error:'El archivo está vacío.'};
   if(t[0]==='{'){let o;try{o=JSON.parse(t)}catch(e){return{error:'El archivo parece un respaldo pero está dañado.'}}
     if(!Array.isArray(o.sondeos))return{error:'Ese archivo no es un respaldo de SEV Campo.'};
-    return{tipo:'respaldo',sondeos:o.sondeos,zonas:Array.isArray(o.zonas)?o.zonas:[]}}
+    return{tipo:'respaldo',sondeos:o.sondeos,zonas:Array.isArray(o.zonas)?o.zonas:[],informes:(o.informes&&typeof o.informes==='object')?o.informes:{}}}
   const meta={},filas=[],modelo={rho:[],h:[]},avisos=[];let cols=null,enModelo=false,sinCols=0;
   for(const linea of t.split(/\r?\n/)){
     const l=linea.trim();if(!l||l.startsWith('#')||l.startsWith('//'))continue;
@@ -1784,15 +1883,19 @@ function crearDesdeImport(){
   const s={id:uid(),nombre:($('#impNombre')?.value.trim())||r.nombre,lugar:r.lugar,fecha:r.fecha,modo:r.modo,alt:r.alt,x:r.x,linea:r.linea||'',arreglo:r.arreglo||'schlum',distB:r.distB??null,lat:r.lat??null,lon:r.lon??null,depto:r.depto,municipio:r.municipio,notas:r.notas,filas};
   if(r.modelo)setModel(s,r.modelo);
   S.sondeos.unshift(s);saveNow();V.imp=null;V.impTexto='';go({view:'sondeo',sid:s.id,tab:'medidas'});toast(`Sondeo importado con ${filas.length} medidas`)}
-function importarRespaldo(){const r=V.imp;if(!r||r.tipo!=='respaldo')return;let n=0;
-  for(const o of r.sondeos){if(!o||!Array.isArray(o.filas))continue;const s=clone(o);if(S.sondeos.some(x=>x.id===s.id))s.id=uid();s.filas=s.filas.map(fila);if(s.alt===undefined)s.alt=null;if(s.x===undefined)s.x=null;S.sondeos.push(s);n++}
+function importarRespaldo(){const r=V.imp;if(!r||r.tipo!=='respaldo')return;let n=0,ni=0;const idMap={};
+  for(const o of r.sondeos){if(!o||!Array.isArray(o.filas))continue;const s=clone(o);const idViejo=s.id;if(S.sondeos.some(x=>x.id===s.id))s.id=uid();idMap[idViejo]=s.id;s.filas=s.filas.map(fila);if(s.alt===undefined)s.alt=null;if(s.x===undefined)s.x=null;S.sondeos.push(s);n++}
+  /* los estudios (informes) también vuelven; las fotos no van en el respaldo, así que habrá que tomarlas de nuevo */
+  if(!S.informes||typeof S.informes!=='object')S.informes={};
+  for(const [k,E] of Object.entries(r.informes||{})){if(!E||!Array.isArray(E.sevs)||S.informes[k])continue;const c=clone(E);c.sevs=c.sevs.map(id=>idMap[id]||id);S.informes[k]=c;ni++}
   let nz=0;for(const z of (r.zonas||[]))if(z&&z.id&&Array.isArray(z.rangos)&&!S.zonas.some(x=>x.id===z.id)){S.zonas.push(clone(z));nz++}
   if(Array.isArray(r.zonasGeo)){S.zonasGeo=Array.isArray(S.zonasGeo)?S.zonasGeo:[];for(const z of r.zonasGeo)if(z&&z.id&&Array.isArray(z.bbox)&&!S.zonasGeo.some(x=>x.id===z.id))S.zonasGeo.push(clone(z))}
-  saveNow();V.imp=null;go({view:'lista'});toast(`${n} sondeo(s)${nz?` y ${nz} tabla(s) de materiales`:''} agregados`)}
+  saveNow();V.imp=null;go({view:'lista'});toast(`${n} sondeo(s)${ni?`, ${ni} estudio(s)`:''}${nz?` y ${nz} tabla(s) de materiales`:''} agregados`)}
 
 /* ---------- archivos (exportar) ---------- */
 function tArchivos(s){
-  return `${ayuda(`<ul><li><b>Informe PDF completo</b>, organizado en secciones: resumen con los resultados principales, curva con el modelo de la app y el de IPI2Win, interpretación preliminar, tabla de capas (N, ρ, h, d, Alt, S, T, material), parámetros de Dar Zarrouk, rangos de equivalencia, resultado de IPI2Win y su comparación con la app, columna de capas, ajuste punto a punto con gráfico de errores, lecturas de campo, control de calidad y método.</li>
+  return `${ayuda(`<ul><li><b>Antes de sacar el PDF</b>: si el sondeo tiene coordenadas, ve a la pestaña <b>Sitio</b> y toca <b>Traer geología del SGC</b> (con internet). Así el informe trae el bloque <b>Hidrogeología del sitio</b> (agua esperada según la roca del punto) y queda guardado para usarlo sin señal.</li>
+    <li><b>Informe PDF completo</b>, organizado en secciones: resumen con los resultados principales, curva con el modelo de la app y el de IPI2Win, interpretación preliminar, tabla de capas (N, ρ, h, d, Alt, S, T, material), parámetros de Dar Zarrouk, rangos de equivalencia, resultado de IPI2Win y su comparación con la app, columna de capas, ajuste punto a punto con gráfico de errores, lecturas de campo, control de calidad y método.</li>
     <li>Para que salga el resultado de IPI2Win, anótalo antes en la pestaña <b>Capas</b> (apartado "Resultado de IPI2Win").</li>
     <li><b>Excel (.csv)</b>: todas las lecturas, K, ρa y el modelo de capas. Ábrelo con Excel; también se puede volver a importar aquí.</li>
     <li><b>IPI2Win (.txt)</b>: tres columnas (AB/2, MN, ρa) para cargar con <b>Open TXT</b> en IPI2Win.</li>
@@ -1865,8 +1968,18 @@ async function exportar(f){const s=cur();
     try{const pdf=await informePDF(s,t=>{const el=$('#progInf');if(el)el.textContent=t},{equiv:S.opciones.equivPDF!==false});closeModal();BUSY=false;guardarArchivo(nombreArchivo(s,'pdf'),'application/pdf',pdf,'pdf')}
     catch(e){closeModal();BUSY=false;toast('No se pudo crear el PDF: '+e.message)}return}
   guardarArchivo(nombreArchivo(s,f),f==='csv'?'text/csv':'text/plain',f==='csv'?csvExcel(s):txtIPI(s),f)}
-function respaldo(){const d=new Date(),nm=`SEV_respaldo_${today()}.json`;
-  guardarArchivo(nm,'application/json',JSON.stringify({app:'SEV Campo',v:3,fecha:d.toISOString(),sondeos:S.sondeos,zonas:S.zonas,informes:S.informes,zonasGeo:S.zonasGeo},null,1),'json')}
+function respaldo(){const d=new Date(),p=n=>String(n).padStart(2,'0'),nm=`Respaldo_SEV_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`;
+  const txt=JSON.stringify({app:'SEV Campo',v:3,fecha:d.toISOString(),sondeos:S.sondeos,zonas:S.zonas,informes:S.informes,zonasGeo:S.zonasGeo},null,1);
+  S.opciones.respFecha=d.toISOString();S.opciones.respVer=(S.opciones.ver||0)+1;saveNow(); /* el guardado sube 'ver' en 1: queda igual a 'respVer' */
+  guardarArchivo(nm,'application/json',txt,'json')}
+/** Estado del respaldo: cuándo fue el último y si hay cambios después. */
+function respInfo(){const o=S.opciones,f=o.respFecha?new Date(o.respFecha):null,h=f?(Date.now()-f.getTime())/36e5:null;return{f,horas:h,cambios:(o.ver||0)!==(o.respVer==null?-1:o.respVer)}}
+const respTexto=r=>!r.f?'todavía no has hecho ningún respaldo':'último respaldo hace '+(r.horas<1?'menos de 1 hora':r.horas<24?Math.floor(r.horas)+' hora(s)':Math.floor(r.horas/24)+' día(s)');
+const hayDatosPropios=()=>S.sondeos.some(s=>!s.ejemplo&&!/San Fernando/.test(s.nombre)&&s.filas.some(f=>num(f.i)!=null||num(f.r)!=null||num(f.rhoa)!=null||num(f.dv1)!=null));
+function pendienteRespaldo(){const r=respInfo();return r.cambios&&hayDatosPropios()&&(!r.f||r.horas>=6)}
+function bannerRespaldo(){if(!pendienteRespaldo())return '';const r=respInfo();
+  return `<div class="note warn" style="display:flex;flex-direction:column;gap:8px"><b>💾 Respaldo pendiente</b><span>Hay cambios sin respaldar (${respTexto(r)}). Tus datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, se pierden. Haz el respaldo y mándatelo por correo, Drive o WhatsApp.</span><button class="btn primary" data-a="respaldo">Respaldar ahora</button></div>`}
+function lineaRespaldo(){const r=respInfo();return `<div class="small muted">💾 ${respTexto(r).replace(/^./,c=>c.toUpperCase())}${r.cambios&&r.f?' · hay cambios nuevos':''}.</div>`}
 
 /* ---------- PDF propio (sin internet ni librerías) ---------- */
 const WIN={'€':128,'‚':130,'„':132,'…':133,'–':150,'—':151,'‘':145,'’':146,'“':147,'”':148,'•':149,'™':153};
@@ -2036,8 +2149,17 @@ async function informePDF(s,prog=()=>{},opt={}){
       tabla([{t:'Ubicación',w:175,al:'left'},{t:'Prof.\n(m)',w:60},{t:'Nivel\n(m)',w:60},{t:'Caudal',w:105,al:'left'},{t:'Calidad',w:110,al:'left'}],
         P.map(p=>[p.ubic||'—',p.prof||'—',p.nivel||'—',p.caudal||'—',p.calidad||'—']),{zebra:true})}}
     seccion('Contexto geológico e hidrogeológico');
-    {const gs=EST.sevs.map(x=>x.geoSGC).find(Boolean);if(gs&&(gs.sym||gs.desc)){parrafo('Según el Servicio Geológico Colombiano (Mapa Geológico de Colombia 2015), en el sitio de los sondeos aflora'+(gs.sym?' la unidad '+gs.sym:'')+(gs.form?' ('+gs.form+')':'')+(gs.desc?': '+gs.desc:'')+(gs.edad?'. Edad: '+gs.edad+'.':'.'),{sz:9.5,extra:5});}}
-    for(const x of EST.sevs){const q=x.geoSGC;if(q&&q.img&&q.img.indexOf('data:')===0){try{imagen({im:{bin:atob(q.img.split(',')[1]),w:q.imw||1000,h:q.imh||916},desc:'Mapa geológico del SGC en el sitio de '+x.nombre+(q.sym?' (unidad '+q.sym+')':'')+'. El punto rojo marca el centro del sondeo.'},515,340,'Figura')}catch(e){}}}
+    {/* sondeos a menos de 1 km comparten el mismo recorte del mapa del SGC (cubre unos 26 x 24 km): se muestra un solo mapa */
+      const dM=(a,b)=>{const la=(+a.lat+ +b.lat)/2*Math.PI/180;return Math.hypot((a.lon-b.lon)*111320*Math.cos(la),(a.lat-b.lat)*110540)};
+      const grp=[];for(const x of EST.sevs){const q=x.geoSGC;if(!q||!(q.sym||q.desc||q.img))continue;
+        const G=grp.find(g=>dM(g.q,q)<=1000);if(G)G.sevs.push(x);else grp.push({q,sevs:[x]})}
+      const nom=g=>{const n=g.sevs.map(x=>x.nombre);return n.length>1?n.slice(0,-1).join(', ')+' y '+n[n.length-1]:n[0]};
+      grp.forEach((g,i)=>{const q=g.q;
+        if(q.sym||q.desc)parrafo('Según el Servicio Geológico Colombiano (Mapa Geológico de Colombia 2015), en '+(grp.length>1?'el sitio de '+(g.sevs.length>1?'los sondeos ':'el sondeo ')+nom(g):'el sitio de los sondeos')+' aflora'+(q.sym?' la unidad '+q.sym:'')+(q.form?' ('+q.form+')':'')+(q.desc?': '+q.desc:'')+(q.edad?'. Edad: '+q.edad+'.':'.'),{sz:9.5,extra:5});
+        const mi=g.sevs.find(x=>x.geoSGC&&x.geoSGC.img&&x.geoSGC.img.indexOf('data:')===0);
+        if(mi){const m=mi.geoSGC;let dmax=0;for(const a of g.sevs)for(const b of g.sevs)if(a.geoSGC&&b.geoSGC)dmax=Math.max(dmax,dM(a.geoSGC,b.geoSGC));
+          const junto=g.sevs.length>1?` Los sondeos ${nom(g)} están a no más de ${Math.max(10,Math.ceil(dmax/10)*10)} m entre sí, por eso se muestra un solo mapa para todos.`:'';
+          try{imagen({im:{bin:atob(m.img.split(',')[1]),w:m.imw||1000,h:m.imh||916},desc:'Mapa geológico del SGC en el sitio de '+(g.sevs.length>1?'los sondeos ':'')+nom(g)+(m.sym?' (unidad '+m.sym+')':'')+'. El punto rojo marca el centro del sondeo '+mi.nombre+'.'+junto},515,340,'Figura')}catch(e){}}})}
     for(const f of fot('geo'))imagen(f,515,330,'Figura');
     bloqueUbic(null);
     seccion('Metodología y equipo');parrafo(EST.equipo,{sz:9,extra:6});metodo(null);
@@ -2047,6 +2169,10 @@ async function informePDF(s,prog=()=>{},opt={}){
       if(D&&D.col&&D.col.length>1){asegurar(430);parrafo('Sección construida con las capas de cada SEV, ubicados según su posición sobre la línea. Entre los sondeos los valores son interpolados: algo angosto (una falla, un lente) que quede entre ellos no se ve.',{sz:8.5,color:GRIS});y=dibujoPerfil(P,D,y,false)}
       else for(let k=0;k<conM.length;k+=2)columnas(conM.slice(k,k+2).map(x=>({m:x.modelo,t:x.nombre})))}
     seccion('Conclusiones');for(const l of lineas(EST.concl))parrafo(l,{sz:9.5,vineta:true,extra:5});
+    if(EST.sevs.length>1){const VS=valoracionSevs(EST.sevs);if(VS.length>1){subt('Comparación entre los sondeos');
+      tabla([{t:'Sondeo',w:125,al:'left',max:26},{t:'Capas',w:40},{t:'Zona con agua (m)',w:95},{t:'Espesor (m)',w:60},{t:'Error (%)',w:55},{t:'Medidas',w:50},{t:'Valoración',w:90,al:'left',max:20}],
+        VS.map(({c,v})=>[c.s.nombre,String(c.L.length),c.P?m1(c.P.top)+' – '+(isFinite(c.P.botReal)&&c.P.botReal<=c.abmax*2/3?m1(c.P.botReal):'más de '+fmt(c.zmax,0)):'—',c.P?fmt(c.P.esp,0):'—',fmt(c.rms,1),String(c.n),v]),{zebra:true});
+      parrafo('La valoración compara el espesor de la capa favorable para agua y el ajuste del modelo. Es una guía; solo la perforación confirma lo que hay.',{sz:7.5,color:GRIS})}}
     seccion('Recomendaciones');for(const l of lineas(EST.recom))parrafo(l,{sz:9.5,vineta:true,extra:5});
     const campo=F.filter(f=>f.cat!=='sat'&&f.cat!=='geo');
     if(campo.length){prog('Registro fotográfico…');seccion('Registro fotográfico');
@@ -2284,7 +2410,8 @@ function tSitio0(s){
       <b>Provincia hidrogeológica ${esc(PROV[c].n)} (${c})</b><div class="small"><b>Acuíferos:</b> ${esc(PROV[c].acu)}</div><div class="small"><b>Calidad del agua:</b> ${esc(PROV[c].agua)}</div>
       ${PROV[c].rho?`<div class="small"><b>Resistividades reportadas:</b> ${esc(PROV[c].rho)}</div>`:''}</div>`).join(''):'';
   return `${ayuda(`<ol><li><b>Sitio</b>: elige el <b>departamento</b> y el <b>municipio</b> donde se hace el sondeo (si el municipio no está en la lista, escríbelo).</li>
-    <li>Se muestra el <b>contexto hidrogeológico oficial</b> (IDEAM, Estudio Nacional del Agua 2014) y la autoridad ambiental, para orientar la interpretación. Para el detalle, abre el mapa geológico del SGC.</li>
+    <li>Se muestra el <b>contexto hidrogeológico oficial</b> (IDEAM, Estudio Nacional del Agua 2014) y la autoridad ambiental, para orientar la interpretación. Para el detalle, abre el mapa geológico del SGC. Ese contexto es <b>regional</b>: depende del departamento, no del punto.</li>
+    <li><b>Geología del SGC en este punto</b> (necesita coordenadas e internet): toca <b>Traer geología del SGC</b> una sola vez, en la casa. La app guarda la roca que reporta el Servicio Geológico en tu punto, su edad y su mapa, y también la altitud si el sondeo no la tenía. Queda guardado: después funciona <b>sin señal</b>. Con eso el informe agrega el bloque <b>Hidrogeología del sitio</b>: qué tipo de roca hay, su potencial para agua, la calidad probable y cómo leer el SEV. Es una estimación general por tipo de roca; no reemplaza un estudio hidrogeológico ni una prueba de bombeo. Si cambias las coordenadas, vuelve a tocar <b>Actualizar datos del sitio</b>.</li>
     <li><b>Agua de la zona</b>: si mides la conductividad del agua de un pozo o aljibe cercano (conductivímetro, µS/cm), la app calcula con la ley de Archie la resistividad esperada de una arena saturada con esa agua.</li>
     <li><b>Tabla de materiales</b>: elige la tabla con la que se nombran las capas. Puedes crear una calibrada para esta zona con los datos de pozos.</li></ol>`)}
   <section class="card" style="display:flex;flex-direction:column;gap:10px"><b>Sitio y contexto regional</b>
@@ -2388,6 +2515,7 @@ document.addEventListener('click',e=>{
     case 'importarAqui':go({view:'importar',impTarget:s.id,imp:null});break;
     case 'perfil':go({view:'perfil'});break;
     case 'eje':go({eje:t.dataset.v});break;
+    case 'altLinea':altLinea();break;
     case 'pLinea':go({linea:t.dataset.v});break;
     case 'pVista':go({pvista:t.dataset.v});break;
     case 'pPDF':{const lin=V.linea==='__todas'?null:V.linea;perfilPDF(lin).then(pdf=>guardarArchivo('Perfil_'+(lin==null?'todos':(lin||'sin_linea')).replace(/[^\w\-]/g,'_')+'.pdf','application/pdf',pdf,'pdf')).catch(e=>toast('No se pudo crear el PDF: '+e.message));break}
@@ -2399,7 +2527,7 @@ document.addEventListener('click',e=>{
     case 'agregar':{const u=s.filas[s.filas.length-1];s.filas.push(fila({ab:u?+(num(u.ab)*1.5).toPrecision(2):1,mn:u?num(u.mn):0.5}));save();go({view:'medida',idx:s.filas.length-1});break}
     case 'prev':saveNow();go({idx:Math.max(0,V.idx-1)});break;
     case 'leerEquipo':leerEquipo();break;
-    case 'next':saveNow();if(V.idx<s.filas.length-1)go({idx:V.idx+1});else{go({view:'sondeo',tab:'curva'});toast('Medidas completas. Esta es tu curva.')}break;
+    case 'next':saveNow();if(V.idx<s.filas.length-1)go({idx:V.idx+1});else{go({view:'sondeo',tab:'curva'});toast('Medidas completas. Esta es tu curva.');if(pendienteRespaldo())confirmar('Terminaste las medidas de este sondeo. ¿Hacer un respaldo ahora? Así no pierdes el trabajo.','Respaldar',()=>{closeModal();respaldo()})}break;
     case 'borrarMedida':confirmar(`¿Borrar la medida ${V.idx+1} (AB/2 ${fmtg(s.filas[V.idx].ab)} m)?`,'Borrar',()=>{s.filas.splice(V.idx,1);saveNow();go({view:'sondeo',tab:'medidas'})});break;
     case 'borrarSondeo':confirmar(`¿Borrar el sondeo "${s.nombre}" con todas sus medidas? No se puede deshacer.`,'Borrar sondeo',()=>{S.sondeos=S.sondeos.filter(x=>x.id!==s.id);saveNow();go({view:'lista',sid:null,volverLista:false});toast('Sondeo borrado')});break;
     case 'exp':exportar(t.dataset.f);break;
@@ -2433,7 +2561,7 @@ document.addEventListener('click',e=>{
   }});
 document.addEventListener('input',e=>{
   if(V.view!=='medida')return;const f=cur().filas[V.idx],id=e.target.id,v=e.target.value.trim();
-  const map={inAB:'ab',inMN:'mn',inI:'i',inD1:'dv1',inD2:'dv2',inSP:'sp',inR:'r',inRHO:'rhoa',inNota:'nota'};if(!map[id])return;
+  const map={inAB:'ab',inMN:'mn',inHA:'hA',inHB:'hB',inI:'i',inD1:'dv1',inD2:'dv2',inSP:'sp',inR:'r',inRHO:'rhoa',inNota:'nota'};if(!map[id])return;
   f[map[id]]=id==='inNota'?v:(v===''?null:num(v));save();actualizarRes()});
 document.addEventListener('change',e=>{
   const t=e.target;

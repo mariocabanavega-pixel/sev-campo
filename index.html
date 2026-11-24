@@ -222,14 +222,15 @@ const SEV = (() => {
     // Regularización suave (Tikhonov): empuja levemente las resistividades hacia el promedio de la curva,
     // para que entre modelos equivalentes se prefieran valores razonables y no extremos.
     const alpha=opt.alpha??0.0001,ref=obs.reduce((a,b)=>a+b,0)/nd,sa=Math.sqrt(alpha*nd);
-    const resid=(cq,pp)=>{const r=obs.map((o,i)=>o-Math.log(cq[i]));for(let i=0;i<N;i++)r.push(sa*(ref-pp[i]));return r};
+    const wt=data.map(d=>d.w==null?1:d.w);
+    const resid=(cq,pp)=>{const r=obs.map((o,i)=>wt[i]*(o-Math.log(cq[i])));for(let i=0;i<N;i++)r.push(sa*(ref-pp[i]));return r};
     let p=toP(m0),cal=forward(data,fromP(p,N)),r=resid(cal,p),phi=r.reduce((s,x)=>s+x*x,0);
     const free=p.map((_,i)=>!fix[i]).map((f,i)=>f?i:-1).filter(i=>i>=0);
     let mu=0.05,it=0;
     for(;it<maxIt&&free.length;it++){
       const Jm=r.map(()=>new Array(free.length).fill(0));
       for(let c=0;c<free.length;c++){const q=p.slice();q[free[c]]+=0.02;const cq=forward(data,fromP(q,N));
-        for(let i=0;i<nd;i++)Jm[i][c]=(Math.log(cq[i])-Math.log(cal[i]))/0.02;
+        for(let i=0;i<nd;i++)Jm[i][c]=wt[i]*(Math.log(cq[i])-Math.log(cal[i]))/0.02;
         if(free[c]<N)Jm[nd+free[c]][c]=sa}
       const JtJ=free.map((_,a)=>free.map((_,b)=>Jm.reduce((s,row)=>s+row[a]*row[b],0)));
       const Jtr=free.map((_,a)=>Jm.reduce((s,row,i)=>s+row[a]*r[i],0));
@@ -328,6 +329,18 @@ function rho(s,f){
   const k=Ks(s,f);if(k==null)return null;
   if(s.modo==='r'){const r=num(f.r);return r==null?null:k*Math.abs(r)}
   const i=num(f.i),dv=dvProm(f);if(i==null||i===0||dv==null)return null;return k*dv/Math.abs(i)}
+/** Calidad de una medida. Si el equipo mandó el error (f.err, en %) se usa ese; si no, en modo I y ΔV se estima con la diferencia entre las dos polaridades. */
+function errMed(s,f){const e=num(f.err);if(e!=null&&e>=0)return{v:e,src:'eq',ef:e};
+  if(s.modo==='iv'){const a=num(f.dv1),b=num(f.dv2),sp=num(f.sp);
+    if(a!=null&&b!=null&&(sp!=null||(a<0)!==(b<0))){const ua=Math.abs(a-(sp??0)),ub=Math.abs(b-(sp??0)),m=Math.max(ua,ub);if(m>0){const d=Math.abs(ua-ub)/m*100;return{v:d,src:'pol',ef:d/2}}}}
+  return null}
+const errEf=(s,f)=>{const q=errMed(s,f);return q?q.ef:null};
+/** 0 = buena (hasta 3 %), 1 = aceptable (hasta 5 %), 2 = dudosa (más de 5 %), null = sin dato. */
+const nivelCal=(s,f)=>{const q=errMed(s,f);return q?(q.ef<=3?0:q.ef<=5?1:2):null};
+const COLCAL=['#1D9E75','#D9A21B','#C0392B'],TXTCAL=['buena','aceptable','dudosa'];
+function chipCal(s,f){const q=errMed(s,f);if(!q)return'';const n=nivelCal(s,f);
+  return `<span class="chip" style="background:${COLCAL[n]}22;color:${COLCAL[n]};font-weight:700" title="${q.src==='eq'?'Error calculado por el equipo':'Diferencia entre las dos polaridades'}">${TXTCAL[n]} · ${q.src==='eq'?'±':'dif. '}${fmt(q.v,1)} %</span>`}
+function resumenCal(s){const u=s.filas.filter(f=>!f.off),c=[0,0,0];let n=0;for(const f of u){const k=nivelCal(s,f);if(k!=null){c[k]++;n++}}return n?{n,c}:null}
 function isEmpalme(s,idx){const f=s.filas[idx];if(!f)return false;return s.filas.some((g,j)=>j!==idx&&num(g.ab)===num(f.ab)&&num(g.mn)!==num(f.mn))}
 const fila=o=>Object.assign({ab:null,mn:null,i:null,dv1:null,dv2:null,sp:null,r:null,rhoa:null,nota:''},o);
 
@@ -368,7 +381,7 @@ window.sevBack=function(){
   if(V.view==='zonas'){if(V.zonaEd)go({zonaEd:null});else go(V.desdeSondeo&&cur()?{view:'sondeo',tab:'sitio'}:{view:'lista'});return true}
   if(V.view==='pasos'){go({view:'estudio'});return true}
   if(V.view==='estudio'){go(cur()?{view:'sondeo',tab:'archivos'}:{view:'lista'});return true}
-  if(V.view==='sondeo'||V.view==='perfil'||V.view==='calib'||V.view==='guia'){go({view:'lista'});return true}
+  if(V.view==='sondeo'||V.view==='perfil'||V.view==='calib'||V.view==='guia'||V.view==='equipo'){go({view:'lista'});return true}
   return false};
 
 /* ---------- piezas comunes ---------- */
@@ -410,6 +423,7 @@ function vLista(){
   <div class="row"><button class="btn" data-a="importar">Importar</button><button class="btn" data-a="perfil">Perfil 2D</button><button class="btn" data-a="respaldo">💾 Respaldo</button></div>
   ${lineaRespaldo()}
   <div class="row"><button class="btn" data-a="zonasLista">Tablas de materiales por zona</button><button class="btn" data-a="calib">Mi tabla de resistividades</button></div>
+  <button class="btn" data-a="equipo">📡 Equipo digital (en vivo, ajustes y calibración)</button>
   <button class="btn" data-a="guia">📘 Guía de uso (todas las funciones)</button>
   ${ed?'<div class="note info small">Modo edición: usa los botones de cada sondeo. Toca <b>Listo</b> para terminar.</div>':''}
   <section class="card"><div class="list">${items||'<div class="empty">Todavía no hay sondeos. Crea uno o impórtalo.</div>'}</div></section></main>`}
@@ -436,6 +450,7 @@ function vEditar(){
   <div class="grid2"><label class="f">Altitud (m s.n.m.)${s.altAuto?' · aproximada':''}<input id="edAlt" inputmode="decimal" value="${fmtg(s.alt)}" placeholder="Opcional"></label>
   <label class="f">Posición X en el perfil (m)<input id="edX" inputmode="decimal" value="${fmtg(s.x)}" placeholder="Opcional"></label></div>
   <label class="f">Línea del perfil<input id="edLinea" value="${esc(s.linea||'')}" placeholder="Ej: L1 (opcional: para el Perfil 2D)"></label>
+  <label class="f">Electrodos de potencial M y N<select id="edElec">${Object.entries(ELEC).map(([k,v])=>`<option value="${k}"${(s.elec||'acero')===k?' selected':''}>${v}</option>`).join('')}</select></label>
   <label class="f">Arreglo de electrodos<select id="edArreglo">${Object.entries(ARREGLOS).map(([k,v])=>`<option value="${k}"${(s.arreglo||'schlum')===k?' selected':''}>${v}</option>`).join('')}</select></label>
   <label class="f">Distancia del centro al electrodo B (m) · solo semi-Schlumberger<input id="edDistB" inputmode="decimal" value="${fmtg(s.distB)}" placeholder="Al menos 5 a 10 veces el AB/2 más abierto"></label>
   <label class="f">Notas<input id="edNotas" value="${esc(s.notas)}" placeholder="Equipo, operador, finca o vereda…"></label>
@@ -445,7 +460,7 @@ function vEditar(){
 function guardarEd(){
   const g=id=>$('#'+id)?.value.trim()||'';
   if(!g('edNombre')){toast('Ponle un nombre al sondeo');$('#edNombre').focus();return}
-  const base={nombre:g('edNombre'),lugar:g('edLugar'),fecha:g('edFecha'),modo:g('edModo')||'iv',alt:num(g('edAlt')),x:num(g('edX')),linea:(g('edLinea')||'').trim(),arreglo:g('edArreglo')||'schlum',distB:num(g('edDistB')),notas:g('edNotas')};
+  const base={nombre:g('edNombre'),lugar:g('edLugar'),fecha:g('edFecha'),modo:g('edModo')||'iv',alt:num(g('edAlt')),x:num(g('edX')),linea:(g('edLinea')||'').trim(),arreglo:g('edArreglo')||'schlum',elec:g('edElec')||'acero',distB:num(g('edDistB')),notas:g('edNotas')};
   if(V.nuevo){const tpl=TPL[g('edTpl')]||[];
     const s=Object.assign({id:uid(),filas:tpl.map(([ab,mn])=>fila({ab,mn}))},base);
     S.sondeos.unshift(s);saveNow();go({view:'sondeo',sid:s.id,tab:'medidas',nuevo:false});toast('Sondeo creado')}
@@ -488,7 +503,7 @@ function tMedidas(s){
   const mns=mnColors(s),ed=!!V.editMed,nBaja=s.modo==='iv'?s.filas.filter(f=>{const d=dvProm(f);return d!=null&&d<SENAL_MIN}).length:0,avA=avisoArreglo(s)+(nBaja?`<div class="note warn small"><b>${nBaja} lectura${nBaja>1?'s':''} con señal baja</b> (menos de ${SENAL_MIN} mV entre M y N). En las AB/2 grandes, amplía MN con empalmes (1 → 5 → 10 m): la señal sube tantas veces como crece MN.</div>`:'');
   const items=s.filas.map((f,i)=>{const p=rho(s,f);
     const cab=`<span class="n">${i+1}</span><span class="dot" style="background:var(${mns.get(num(f.mn))||'--muted'})"></span>
-    <div class="main"><b>AB/2 ${fmtg(f.ab)} m</b> <span class="meta">· MN ${fmtg(f.mn)} m</span> ${isEmpalme(s,i)?'<span class="chip emp">Empalme</span>':''}${s.modo==='iv'&&dvProm(f)!=null&&dvProm(f)<SENAL_MIN?' <span class="chip" style="background:#FBEFD9;color:#9A5B00">Señal baja</span>':''}${f.off?' <span class="chip" style="background:var(--line);color:var(--muted)">sin usar</span>':''}
+    <div class="main"><b>AB/2 ${fmtg(f.ab)} m</b> <span class="meta">· MN ${fmtg(f.mn)} m</span> ${isEmpalme(s,i)?'<span class="chip emp">Empalme</span>':''}${s.modo==='iv'&&dvProm(f)!=null&&dvProm(f)<SENAL_MIN?' <span class="chip" style="background:#FBEFD9;color:#9A5B00">Señal baja</span>':''}${f.off?' <span class="chip" style="background:var(--line);color:var(--muted)">sin usar</span>':chipCal(s,f)}
     ${f.nota?`<div class="meta">${esc(f.nota)}</div>`:''}</div>
     <div class="val"${f.off?' style="opacity:.45;text-decoration:line-through"':''}>${p==null?'<span class="muted">pendiente</span>':fmt(p)+' Ω·m'}</div>`;
     if(!ed)return `<button class="item" data-a="medida" data-i="${i}">${cab}</button>`;
@@ -508,6 +523,7 @@ function tMedidas(s){
     <li>Cuando tengas varias, mira la pestaña <b>Curva</b> y luego <b>Capas</b>.</li></ol>`)}
   <div class="row">${ed?'<button class="btn primary" data-a="editMed">Listo</button><button class="btn" data-a="ordenarAB">Ordenar por AB/2</button>'
     :`${pend>=0?`<button class="btn primary" data-a="medida" data-i="${pend}">Seguir midiendo (${pend+1})</button>`:''}<button class="btn" data-a="editMed">Ordenar y editar</button>`}</div>
+  ${(()=>{const q=resumenCal(s);return q?`<div class="small" style="margin:4px 0"><b>Calidad de las medidas:</b> <span style="color:${COLCAL[0]}">${q.c[0]} buena${q.c[0]===1?'':'s'}</span> · <span style="color:${COLCAL[1]}">${q.c[1]} aceptable${q.c[1]===1?'':'s'}</span> · <span style="color:${COLCAL[2]}">${q.c[2]} dudosa${q.c[2]===1?'':'s'}</span> (de ${q.n} con dato). Las dudosas pesan menos al calcular las capas.</div>`:''})()}
   <section class="card"><div class="list">${items||'<div class="empty">Sin medidas. Agrega la primera o importa un TXT.</div>'}</div></section>
   ${cardTerrenoSev(s)}
   <div class="row"><button class="btn" data-a="insertarM" data-i="-1">+ Agregar al principio</button><button class="btn" data-a="agregar">+ Agregar al final</button></div>`}
@@ -554,14 +570,17 @@ function vMedida(){
     ${inputs}
   </section>
   <section class="card" style="display:flex;flex-direction:column;gap:8px">
+    ${eqUsa()?'<div data-eqlive="mini">'+htmlEq(true)+'</div>':''}
     <button class="btn" data-a="leerEquipo">Leer del equipo digital</button>
-    <div class="small muted">Con el celular en la red Wi-Fi <b>SEV-Campo</b>: aprieta S1 con S2 en 1 y luego en 2, y toca este botón. Llena la lectura sola, ya sin el potencial natural.</div>
+    <div class="small muted">Con el celular en la red Wi-Fi <b>SEV-Campo</b> y la app abierta desde <b>192.168.4.1</b>: en AUTO aprieta S1 y no lo sueltes hasta que diga <b>LISTO</b>; luego toca este botón. Llena la lectura sola, ya sin el potencial natural.</div>
+    <button class="btn sm" data-a="equipo">📡 Pantalla del equipo (ajustes y calibración)</button>
   </section>
   <div class="result" id="res" aria-live="polite"></div>
   <div id="avisos" style="display:flex;flex-direction:column;gap:8px"></div>
   ${f.off?'<div class="note warn small"><b>Este punto está apagado:</b> no entra en el cálculo de las capas. Sigue guardado por si lo quieres volver a activar.</div>':''}
   <button class="btn ${f.off?'primary':'ghost'}" data-a="toggleOff" data-i="${i}">${f.off?'✓ Volver a usar este punto':'🚫 No usar este punto en el cálculo'}</button>
   <div class="small muted">Úsalo cuando un punto se sale mucho de la curva y crees que fue un error de lectura (por ejemplo los primeros, con AB/2 chiquito). Apagarlo lo deja por fuera del cálculo sin borrarlo. Después vuelve a <b>Capas</b> y toca <b>Automático</b> para afinar el modelo.</div>
+  <label class="f">Error de la medida, en % (opcional)<input id="inErr" inputmode="decimal" value="${fmtg(f.err)}" placeholder="el equipo lo llena solo"></label>
   <label class="f">Nota (opcional)<input id="inNota" value="${esc(f.nota)}" placeholder="Suelo mojado, lectura inestable…"></label>
   <div class="row"><button class="btn" data-a="prev" ${i===0?'disabled':''}>‹ Anterior</button>
   <button class="btn primary" data-a="next">${i===tot-1?'Terminar':'Siguiente ›'}</button></div>
@@ -577,16 +596,72 @@ async function leerEquipo(){
   const ps=(est.pulsos||[]).filter(p=>p.dv!=null&&p.i!=null&&Math.abs(p.i)>0.2);
   if(!ps.length){toast('El equipo todavía no tiene lecturas. Aprieta S1 unos 3 segundos y vuelve a tocar el botón.');return}
   const pos=ps.filter(p=>p.dv>0),neg=ps.filter(p=>p.dv<0),sum=(a,g)=>a.reduce((x,p)=>x+g(p),0),r5=x=>+x.toPrecision(5);
-  const I=sum(ps,p=>Math.abs(p.i))/ps.length,R=sum(ps,p=>Math.abs(p.dv))/sum(ps,p=>Math.abs(p.i));
+  const rs=est.res&&est.res.r!=null&&isFinite(est.res.r)&&est.res.r>0?est.res:null;
+  const I=sum(ps,p=>Math.abs(p.i))/ps.length,R=rs?Math.abs(rs.r):sum(ps,p=>Math.abs(p.dv))/sum(ps,p=>Math.abs(p.i));
+  if(rs&&rs.err!=null&&isFinite(rs.err))f.err=+(+rs.err).toFixed(2);else f.err=null;
   if(s.modo==='iv'){f.i=r5(I);f.dv1=pos.length?r5(sum(pos,p=>p.dv)/pos.length):null;f.dv2=neg.length?r5(sum(neg,p=>p.dv)/neg.length):null;f.sp=0}
   else if(s.modo==='r')f.r=r5(R);
   else{const k=Ks(s,f);if(k==null){toast('Escribe AB/2 y MN antes de leer.');return}f.rhoa=r5(k*R)}
   if(!f.nota)f.nota='equipo digital';
   const av=[];if(!pos.length||!neg.length)av.push('falta la lectura '+(pos.length?'invertida (S2 en 2)':'normal (S2 en 1)'));
   if(pos.length&&neg.length){const Rp=sum(pos,p=>p.dv)/sum(pos,p=>Math.abs(p.i)),Rn=sum(neg,p=>-p.dv)/sum(neg,p=>Math.abs(p.i)),d=Math.abs(Rp-Rn)/R*100;if(d>5)av.push(`las dos polaridades difieren ${fmt(d,0)} %`)}
-  if(ps.some(p=>p.ruido!=null&&p.ruido>0.05*Math.abs(p.dv)))av.push('hubo lecturas inestables');
+  if(!rs&&ps.some(p=>p.ruido!=null&&p.ruido>0.05*Math.abs(p.dv)))av.push('hubo lecturas inestables');
+  if(rs&&rs.err>5)av.push(`el error es alto (${fmt(rs.err,1)} %): da otro par de pulsos o revisa M y N`);
+  if(rs&&rs.nd>0)av.push(`el equipo apartó ${rs.nd} pulso${rs.nd>1?'s':''} malo${rs.nd>1?'s':''}`);
   try{await fetch(eqBase()+'/api/limpiar',{cache:'no-store'})}catch(e){}
-  saveNow();render();toast(`Leído del equipo (${ps.length} pulso${ps.length>1?'s':''}): R = ${fmt(R,4)} Ω`+(av.length?'. Ojo: '+av.join(', ')+'.':''))}
+  saveNow();render();toast(`Leído del equipo (${ps.length} pulso${ps.length>1?'s':''}): R = ${fmt(R,4)} Ω${rs&&rs.err!=null?` ± ${fmt(rs.err,1)} %`:''}`+(av.length?'. Ojo: '+av.join(', ')+'.':''))}
+/* ---------- Pantalla "Equipo digital": todo en la app (una sola pantalla) ---------- */
+const EQ={est:null,ok:false,t:0,timer:null,nfail:0};
+const eqUsa=()=>location.hostname==='192.168.4.1'||!!S.opciones.equipo;
+async function eqGet(ruta,ms=2500){const c=new AbortController(),tm=setTimeout(()=>c.abort(),ms);
+  try{const r=await fetch(eqBase()+ruta,{cache:'no-store',signal:c.signal});const tx=await r.text();return{ok:r.ok,tx}}finally{clearTimeout(tm)}}
+async function eqPoll(){if(document.hidden)return;
+  try{const r=await eqGet('/api');EQ.est=JSON.parse(r.tx);EQ.ok=true;EQ.nfail=0}catch(e){EQ.ok=false;EQ.nfail++}
+  EQ.t=Date.now();pintarEq()}
+function eqParar(){if(EQ.timer){clearInterval(EQ.timer);EQ.timer=null}}
+function eqIniciar(){eqParar();if(V.view==='equipo'||(V.view==='medida'&&eqUsa())){eqPoll();EQ.timer=setInterval(eqPoll,1000)}}
+function htmlEq(compacto){const e=EQ.est;
+  if(!EQ.ok||!e)return `<div class="note warn small"><b>Sin conexión con el equipo.</b> Conecta el celular al Wi‑Fi <b>SEV-Campo</b> (clave sev12345) y abre esta app desde <b>http://192.168.4.1</b>.${location.protocol==='https:'?' Esta es la versión de internet (https): el navegador no la deja leer el equipo. Abre mejor la app del equipo.':''}</div>`;
+  const nivel=x=>x==null?null:(x<=3?0:x<=5?1:2);
+  const listo=/^listo/.test(e.fase||''),det=/^detenido/.test(e.fase||'');
+  const res=e.res&&e.res.r!=null?e.res:null,ni=res?nivel(res.err):null;
+  const chip=(t,c)=>`<span class="chip" style="background:${c}22;color:${c};font-weight:700">${t}</span>`;
+  const cabeza=[chip(e.enlace?'enlace con el transmisor':'sin señal del transmisor',e.enlace?COLCAL[0]:COLCAL[2]),e.adc?chip(esc(e.adc),'#5E6B66'):'',e.sat?chip('saturado: baja el voltaje',COLCAL[2]):'',e.auto?chip('automático','#2F6FDB'):chip('manual','#5E6B66'),e.s1?chip('S1 apretado',COLCAL[1]):''].join(' ');
+  const caja=(bg,tx,sz)=>`<div style="background:${bg};color:#fff;font-weight:800;font-size:${sz}px;text-align:center;padding:12px;border-radius:10px">${tx}</div>`;
+  const grande=listo?caja(COLCAL[0],'✔ LISTO: SUELTA S1',20)
+    :det?caja(COLCAL[2],'DETENIDO'+(e.motivo?': '+esc(e.motivo):''),16)
+    :e.on?caja(COLCAL[1],'⚡ PASANDO CORRIENTE: nadie cerca de A y B',16):'';
+  const f=(t,v,u,d)=>`<div style="flex:1;min-width:30%"><div class="small muted">${t}</div><div style="font-size:20px;font-weight:800">${v==null||!isFinite(v)?'—':fmt(v,d)} <span class="small muted">${u}</span></div></div>`;
+  const nums=`<div class="row" style="gap:8px;flex-wrap:nowrap">${f('ΔV',e.v,'mV',3)}${f('Corriente',e.i,'mA',1)}${f('Pot. natural',e.sp,'mV',3)}</div>`;
+  const fase=`<div class="small"><b>Fase:</b> ${esc(e.fase||'—')}${e.ciclo!=null&&e.nc?` · ciclo ${e.ciclo} de ${e.nc} (máx.)`:''}${e.vsal!=null&&isFinite(e.vsal)?` · salida ${fmt(e.vsal,0)} V`:''}</div>`;
+  const notas=(e.nota?`<div class="small">${esc(e.nota)}</div>`:'')+(e.motivo&&!det?`<div class="small muted">${esc(e.motivo)}</div>`:'');
+  const resu=res?`<div style="border:1px solid var(--line);border-radius:10px;padding:8px"><div class="small muted">Resultado del equipo</div><div style="font-size:18px;font-weight:800">R = ${fmt(res.r,4)} Ω ${res.err!=null?chip('± '+fmt(res.err,1)+' % · '+TXTCAL[ni],COLCAL[ni]):''}</div><div class="small muted">pulsos usados: ${res.np} (+) y ${res.nn} (−)${res.nd>0?' · apartados: '+res.nd:''}</div></div>`:'<div class="small muted">Todavía no hay resultado: aprieta S1.</div>';
+  const corto=res?`<div class="small"><b>R = ${fmt(res.r,4)} Ω</b> ${res.err!=null?chip('± '+fmt(res.err,1)+' %',COLCAL[ni]):''}</div>`:'';
+  return `<div style="display:flex;flex-direction:column;gap:8px"><div>${cabeza}</div>${grande}${nums}${fase}${notas}${compacto?corto:resu}</div>`}
+function pintarEq(){for(const el of document.querySelectorAll('[data-eqlive]'))el.innerHTML=htmlEq(el.dataset.eqlive==='mini')}
+function vEquipo(){const e=EQ.est||{};
+  const ayu=ayuda(`<ol><li>Conecta el celular al Wi‑Fi <b>SEV-Campo</b> (clave sev12345) y abre <b>http://192.168.4.1</b>: se abre esta app.</li>
+   <li>Arriba ves el equipo <b>en vivo</b>: enlace, ΔV, corriente, potencial natural, la fase y el aviso verde <b>"LISTO: SUELTA S1"</b>.</li>
+   <li>Para medir: pon los electrodos, escoge el voltaje con S4, avisa que nadie toque A ni B y <b>aprieta S1 sin soltarlo</b> (selector en AUTO). Suelta cuando salga el aviso verde.</li>
+   <li>Abajo cambias los <b>ajustes del automático</b> y <b>calibras</b>. Quedan guardados en el equipo.</li>
+   <li>Para llevar la lectura a un sondeo, abre la medida y toca <b>Leer del equipo digital</b>.</li></ol>
+   <p>La orden de dar corriente siempre la da S1 con tu mano: por seguridad no hay botón de inicio en el celular.</p>`);
+  return barra('Equipo digital','Lectura en vivo, ajustes y calibración',true)+`<main>${ayu}
+  <section class="card" style="display:flex;flex-direction:column;gap:8px"><b>📡 Equipo en vivo</b><div data-eqlive="full">${htmlEq(false)}</div>
+    <div class="row"><button class="btn" data-a="eqLimpiar">Borrar pulsos del equipo</button></div>
+    <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="eqUsar" style="width:22px;height:22px;flex:none" ${S.opciones.equipo?'checked':''} ${location.hostname==='192.168.4.1'?'disabled':''}> Estoy usando el equipo digital (mostrar la lectura en vivo en cada medida)</label></section>
+  <section class="card" style="display:flex;flex-direction:column;gap:10px"><b>⚙ Ajustes del automático</b>
+    <div class="grid2"><label class="f">Pulso (s)<input id="eqTp" inputmode="decimal" value="${e.tp!=null?fmtg(e.tp):'3'}"></label><label class="f">Pausa (s)<input id="eqPa" inputmode="decimal" value="${e.pa!=null?fmtg(e.pa):'2'}"></label></div>
+    <div class="grid2"><label class="f">Ciclos (máximo)<input id="eqNc" inputmode="numeric" value="${e.nc!=null?e.nc:4}"></label><label class="f">Error objetivo (%)<input id="eqObj" inputmode="decimal" value="${e.obj!=null?fmtg(e.obj):'2'}"></label></div>
+    <div class="small muted">Cada ciclo es un pulso + y uno −. El equipo hace mínimo 2 ciclos y para solo cuando el error baja del objetivo (0 = hacer siempre todos los ciclos).</div>
+    <div class="row"><button class="btn primary" data-a="eqGuardar">Guardar ajustes</button><button class="btn" data-a="eqPreset" data-p="acero">Preajuste: varillas de acero</button><button class="btn" data-a="eqPreset" data-p="impol">Preajuste: impolarizables</button></div></section>
+  <section class="card" style="display:flex;flex-direction:column;gap:10px"><b>🎯 Calibración (una sola vez)</b>
+    <div class="small muted">Hazla en la mesa, con el transmisor en la derivación de menor voltaje. Factores actuales: ΔV ×${e.kv!=null?fmt(e.kv,3):'—'} · corriente ×${e.ki!=null?fmt(e.ki,3):'—'} (lo normal es entre 0,9 y 1,1).</div>
+    <label class="f">ΔV real en MN (mV)<input id="eqKv" inputmode="decimal" placeholder="lo que marca el multímetro 2"></label><button class="btn" data-a="eqCal" data-t="v">Calibrar ΔV</button>
+    <label class="f">Corriente real (mA)<input id="eqKi" inputmode="decimal" placeholder="lo que marca el multímetro 1"></label><button class="btn" data-a="eqCal" data-t="i">Calibrar corriente</button>
+    <button class="btn danger" data-a="eqCal" data-t="borrar">Quitar calibración</button>
+    <div class="small muted">ΔV: une M y N con un cable corto, pon un voltaje estable con el compensador y escribe lo que marca el multímetro 2. Corriente: con un pulso real, escribe lo que marca el multímetro 1 (mV = mA). Detalle en la guía de calibración.</div></section>
+  <div class="small muted">¿Prefieres la página vieja del equipo? Abre <b>http://192.168.4.1/equipo</b>.</div></main>`}
 function empMsg(s,i){const f=s.filas[i];const otro=s.filas.find((g,j)=>j!==i&&num(g.ab)===num(f.ab));
   return otro?`Aquí va con MN ${fmtg(f.mn)} m; la otra lectura es con MN ${fmtg(otro.mn)} m.`:''}
 /** Señal baja: con menos de 5 mV entre M y N el ruido pesa mucho. Lo más eficaz es ampliar MN (empalme). */
@@ -610,6 +685,7 @@ function actualizarRes(){
   if((num(f.hA)!=null||num(f.hB)!=null)&&num(s.alt)==null&&num(f.dA)==null&&num(f.dB)==null)av.push('Anotaste la altitud de A o B, pero el sondeo no tiene altitud. Ponla en los datos del sondeo, o escribe mejor el cambio (+ sube, − baja) desde la medida anterior.');
   {const ac=$('#accAB'),z=zRel(s,f);if(ac)ac.innerHTML=z?`Hasta esta medida: <b>A ${sgn(z.zA)} m</b> y <b>B ${sgn(z.zB)} m</b> respecto al centro.`:'';}
   {const z=zRel(s,f);if(z&&ab>0){const p=Math.max(Math.abs(z.zA),Math.abs(z.zB))/ab*100;if(p>10)av.push(`El terreno es inclinado (hasta ${fmt(p,0)} % de la apertura). El K ya usa la distancia real, pero el relieve también distorsiona la corriente: toma el resultado con reserva y, si puedes, ubica la línea sobre terreno más plano.`)}}
+  {const q=errMed(s,f);if(q&&q.ef>5)av.push(`El error de esta medida es ${fmt(q.v,1)} % (${q.src==='eq'?'lo calculó el equipo':'diferencia entre polaridades'}). Da otro par de pulsos o revisa M y N. Con más de 5 % pesa menos al calcular las capas.`)}
   if(ab!=null&&mn!=null&&k==null)av.push('Revisa AB/2 y MN: AB/2 tiene que ser mayor que la mitad de MN.');
   else if(ab!=null&&mn!=null&&mn>0.4*ab)av.push(`MN es grande para esta AB/2 (debería ser máximo ${fmt(0.4*ab,1)} m). La lectura puede salir distorsionada.`);
   if(s.modo==='iv'){const a=num(f.dv1),b=num(f.dv2),sp=num(f.sp);
@@ -630,7 +706,7 @@ const labLog=v=>v>=1000?(+(v/1000).toPrecision(3))+'k':String(+v.toPrecision(3))
 function curvaTeo(groups,M){const teo=[];for(const [mn0,g] of groups){const mn=mn0||0.01,lo=Math.max(g[0].ab,mn/2*1.05),hi=g[g.length-1].ab;if(!(hi>lo))continue;
     const n=Math.max(2,Math.ceil(10*Math.log10(hi/lo))+1),pp=[];for(let k=0;k<n;k++){const sab=lo*Math.pow(hi/lo,k/(n-1)),v=SEV.rhoa(sab,mn,M.rho,M.h);if(v>0)pp.push([sab,v])}teo.push(pp)}return teo}
 function curvaDatos(s,M,I){
-  const pts=s.filas.map((f,i)=>({i,ab:num(f.ab),mn:num(f.mn),p:rho(s,f),off:!!f.off})).filter(o=>o.ab>0&&o.p>0);
+  const pts=s.filas.map((f,i)=>({i,ab:num(f.ab),mn:num(f.mn),p:rho(s,f),off:!!f.off,e:errEf(s,f)})).filter(o=>o.ab>0&&o.p>0);
   if(!pts.length)return null;
   const xs=pts.map(o=>o.ab),ys=pts.map(o=>o.p),zs=M?espesores(M):[],zsI=I?espesores(I):[];
   const yLo=Math.min(...ys),yHi=Math.max(...ys);
@@ -660,7 +736,7 @@ function curva(s,opt={}){
     for(const pp of teo)if(pp.length>1)modelo+=`<polyline points="${pp.map(([a,v])=>X(a).toFixed(1)+','+Y(v).toFixed(1)).join(' ')}" fill="none" stroke="var(--danger)" stroke-width="2.2" stroke-linejoin="round"/>`}
   for(const [mn,g] of groups){const c=`var(${cols.get(mn)||'--s1'})`;
     if(g.length>1&&!M)segs+=`<polyline points="${g.map(o=>X(o.ab).toFixed(1)+','+Y(o.p).toFixed(1)).join(' ')}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
-    for(const o of g)dots+=`<circle cx="${X(o.ab).toFixed(1)}" cy="${Y(o.p).toFixed(1)}" r="${M?3.6:4}" fill="${M?'var(--surface)':c}" stroke="${c}" stroke-width="${M?2:0}"/><circle cx="${X(o.ab).toFixed(1)}" cy="${Y(o.p).toFixed(1)}" r="12" fill="transparent" data-a="pt" data-i="${o.i}" style="cursor:pointer"/>`}
+    for(const o of g)dots+=(o.e>0?`<line x1="${X(o.ab).toFixed(1)}" x2="${X(o.ab).toFixed(1)}" y1="${Y(o.p*(1+Math.min(o.e,60)/100)).toFixed(1)}" y2="${Y(o.p*(1-Math.min(o.e,60)/100)).toFixed(1)}" stroke="${c}" stroke-width="1.3" opacity=".6"/>`:'')+`<circle cx="${X(o.ab).toFixed(1)}" cy="${Y(o.p).toFixed(1)}" r="${M?3.6:4}" fill="${M?'var(--surface)':c}" stroke="${c}" stroke-width="${M?2:0}"/><circle cx="${X(o.ab).toFixed(1)}" cy="${Y(o.p).toFixed(1)}" r="12" fill="transparent" data-a="pt" data-i="${o.i}" style="cursor:pointer"/>`}
   let offDots='';for(const o of (C.offPts||[])){const x=+X(o.ab).toFixed(1),y=+Y(o.p).toFixed(1);offDots+=`<line x1="${(x-3.5).toFixed(1)}" y1="${(y-3.5).toFixed(1)}" x2="${(x+3.5).toFixed(1)}" y2="${(y+3.5).toFixed(1)}" stroke="var(--muted)" stroke-width="1.6"/><line x1="${(x-3.5).toFixed(1)}" y1="${(y+3.5).toFixed(1)}" x2="${(x+3.5).toFixed(1)}" y2="${(y-3.5).toFixed(1)}" stroke="var(--muted)" stroke-width="1.6"/><circle cx="${x}" cy="${y}" r="12" fill="transparent" data-a="pt" data-i="${o.i}" style="cursor:pointer"/>`}
   const leg=[...groups.keys()].map(mn=>`<span><i class="dot" style="background:var(${cols.get(mn)||'--s1'})"></i>${mn?'MN '+fmtg(mn)+' m':'Datos'}</span>`).join('')+
     ((C.offPts&&C.offPts.length)?`<span><i class="dot" style="background:var(--muted)"></i>Sin usar (✕)</span>`:'')+
@@ -673,7 +749,7 @@ function curva(s,opt={}){
   ${modelo}${segs}${offDots}${dots}</svg><div class="legend">${leg}</div>`}
 
 /* ---------- capas: interpretación tipo IPI2Win ---------- */
-function datosInv(s){return s.filas.filter(f=>!f.off).map(f=>({ab:num(f.ab),mn:num(f.mn)||Math.max(0.01,num(f.ab)/10),rho:rho(s,f)})).filter(d=>d.ab>0&&d.rho>0&&d.ab>d.mn/2)}
+function datosInv(s){return s.filas.filter(f=>!f.off).map(f=>({ab:num(f.ab),mn:num(f.mn)||Math.max(0.01,num(f.ab)/10),rho:rho(s,f),w:(()=>{const e=errEf(s,f);return e==null?1:Math.max(0.25,1/Math.max(1,e/2))})()})).filter(d=>d.ab>0&&d.rho>0&&d.ab>d.mn/2)}
 function material(r){
   if(r<1)return'Agua salada o arcilla muy salina';if(r<10)return'Arcilla, o arena con agua salobre';
   if(r<30)return'Arcilla arenosa o limo húmedo';if(r<100)return'Arena o grava con agua dulce';
@@ -974,6 +1050,7 @@ function cargarEstudios(){let n=0,c=0;for(const o of ESTUDIOS){const ex=S.sondeo
 /* ---------- arreglo semi-Schlumberger y pozos de referencia ---------- */
 /* Semi-Schlumberger (polo-dipolo): B muy lejos y solo se abre A. Sobre capas horizontales da la misma ρa que el
    Schlumberger con AB/2 = L (distancia de A al centro de MN), así que la inversión no cambia; solo K se duplica. */
+const ELEC={acero:'Varillas de acero (lo normal)',impol:'Electrodos impolarizables (cobre y sulfato de cobre)'};
 const ARREGLOS={schlum:'Schlumberger (A y B simétricos)',semi:'Semi-Schlumberger (B fijo muy lejos, solo se abre A)'};
 const esSemi=s=>!!s&&s.arreglo==='semi';
 /** Alturas de A y B respecto al centro (m). Se escriben como altitud (m s.n.m.); M y N se toman a la altitud del centro del sondeo (la de las coordenadas). */
@@ -1098,6 +1175,10 @@ function vGuia(){
    <li><b>A y B (corriente)</b>: uno a cada lado del centro, a la misma distancia <b>AB/2</b>. Ejemplo: si la app dice AB/2 = 10 m, clavas A a 10 m hacia un lado y B a 10 m hacia el otro (entre A y B hay 20 m).</li>
    <li><b>M y N (voltaje)</b>: también uno a cada lado del centro, bien juntos. Si la app dice MN = 0,5 m, pones M y N a 0,25 m del centro cada uno. Siempre simétricos.</li>
    <li>Mide con la cinta <b>sobre el terreno</b>, en línea recta. Moja la tierra de cada varilla para que haga buen contacto.</li>
+   <li><b>Electrodos de M y N: hay dos opciones y la app y el equipo funcionan con las dos.</b> En <b>Editar</b> del sondeo escoge cuál usaste.<ul>
+     <li><b>Varillas de acero (la más fácil).</b> Usa dos varillas <b>iguales</b>, limpias (sin óxido ni pintura) y clavadas unos 20 a 30 cm. Moja la tierra alrededor con agua salada. El acero crea un voltaje propio (potencial natural) que puede ser grande y moverse, pero el equipo lo mide entre pulsos y lo cancela al invertir la polaridad; por eso conviene usar el modo automático con varios ciclos. <b>Espera 2 a 3 minutos</b> después de clavarlas, y 1 minuto cada vez que las cambies de lugar. No las toques mientras mides.</li>
+     <li><b>Impolarizables (más trabajo, mejor señal).</b> Tubo con fondo poroso, varilla de cobre y sulfato de cobre. Casi no generan voltaje propio y ayudan sobre todo en las aperturas grandes. Entiérralos o dales sombra: dos electrodos a distinta temperatura crean un voltaje falso. El sulfato de cobre es tóxico: usa guantes y no lo botes en ríos ni pozos.</li></ul>
+     <b>A y B siempre son varillas de acero.</b></li>
    <li>Después de cada medida, <b>aleja A y B</b> a la siguiente AB/2 que indica la app. M y N no se mueven mientras la señal sea buena.</li>
    <li>Cuando A y B ya están lejos y la señal se pone muy baja, <b>amplía MN</b> (por ejemplo de 0,5 a 2 m, luego 5 y 10 m). En ese cambio se hace un <b>empalme</b>: se repite la misma AB/2 con el MN nuevo. <b>A y B no se mueven, solo M y N.</b> Las dos ρa deben salir parecidas.</li>
    <li>Regla práctica: MN no debe pasar de 4/10 de AB/2 (la app te avisa).</li>
@@ -1134,34 +1215,37 @@ function vGuia(){
    <p><b>Equipos con inversión automática:</b> si tu equipo tiene los contactores nuevos, la polaridad la cambia el equipo (capítulo siguiente). Con el selector en manual y S6 en 1 se usa el interruptor <b>S7</b>; con S6 en 2, el <b>S2 de levas</b>. Mueve S2, S6 y S7 <b>solo con S1 suelto</b>.</p>
    <p><b>Si no llevas el celular al campo:</b> usa una libreta con columnas <b>N.º · AB/2 · MN · I (mA) · ΔV 1 (mV) · ΔV 2 (mV) · SP (mV) · nota</b>, y pasas los datos a la app en casa. Anota también lomas, rocas, agua o cercas cerca de cada electrodo. Quítales el apagado automático a los multímetros y lleva pilas de repuesto.</p>
    <p><b>Seguridad:</b> nadie a menos de 2 m de A y B mientras S1 esté apretado; guantes dieléctricos clase 0; no medir con lluvia; S4 y S2 solo se giran con S1 suelto; no toques el multímetro 1 ni su acrílico mientras S1 esté apretado o los condensadores tengan carga.</p>
+   <p><b>Con varillas de acero en M y N:</b> el SP puede ser de decenas de mV y moverse. Anótalo con S1 suelto antes de cada pulso, o llévalo a 0,00 con P1, y no te saltes la polaridad invertida: es la que lo cancela. Espera 2 a 3 minutos después de clavar las varillas.</p>
+   <p><b>Subir el voltaje a mitad del sondeo:</b> si la señal sale muy baja, cambia S4 solo entre puntos, con S1 suelto, y repite el último punto con el voltaje nuevo; debe dar casi igual (menos de 5 %). Anota en la libreta desde qué punto cambiaste.</p>
    <p><b>Al terminar:</b> S4 en 0, S2 en 0, apaga el inversor y aprieta S3 hasta que V1 marque 0.</p>`),
-  CAP('auto','★ Empieza aquí (4 de 4): medir con el equipo digital (celular)',`<p><b>Cómo funciona.</b> El equipo tiene dos módulos con cerebro electrónico (ESP32):</p>
+  CAP('auto','★ Empieza aquí (4 de 4): medir con el equipo digital (una sola pantalla)',`<p><b>Cómo funciona.</b> El equipo tiene dos módulos con cerebro electrónico (ESP32):</p>
    <ul><li><b>Módulo 1 (corriente)</b>: va dentro de la caja del transmisor, en la zona de alto voltaje. Mide la corriente sobre la resistencia de 1 Ω y el voltaje de salida, y los manda por radio al otro módulo.</li>
-   <li><b>Módulo 2 (voltaje y celular)</b>: va en la zona de medida. Mide ΔV entre M y N, recibe la corriente, calcula R = ΔV ÷ I y ρa, y crea una red Wi‑Fi llamada <b>SEV-Campo</b> (clave <b>sev12345</b>). Cada vez que aprietas S1 detecta el pulso, <b>resta solo el potencial natural</b> y <b>promedia el pulso normal con el invertido</b>.</li>
+   <li><b>Módulo 2 (voltaje y celular)</b>: va en la zona de medida. Mide ΔV entre M y N, recibe la corriente, calcula R = ΔV ÷ I y ρa, y crea una red Wi‑Fi llamada <b>SEV-Campo</b> (clave <b>sev12345</b>). Guarda esta misma app adentro y la entrega al celular. Cada vez que aprietas S1 detecta el pulso, <b>resta solo el potencial natural</b> y <b>promedia el pulso normal con el invertido</b>.</li>
    <li>Cada módulo tiene su propio cargador de celular. Entre los dos solo hay radio. <b>Con el transmisor encendido, el Módulo 1 queda a alto voltaje: no se toca.</b></li></ul>
+   <p><b>Una sola dirección.</b> Conecta el celular (o el computador) al Wi‑Fi <b>SEV-Campo</b> y abre <b>http://192.168.4.1</b> en Chrome (escribe el <b>http://</b> completo). Se abre <b>esta app</b>, sin internet. Android avisa "sin internet": elige <b>Mantener conexión</b>; si no abre, apaga los datos móviles. Puedes abrirla en <b>dos aparatos a la vez</b> (hasta 4).</p>
+   <p><b>Dónde ves el equipo.</b> En la pantalla principal toca <b>📡 Equipo digital</b>. Ahí ves <b>en vivo</b>: si hay enlace con el transmisor, ΔV, corriente, potencial natural, la fase ("pulso +", "pausa"), el aviso verde <b>"LISTO: SUELTA S1"</b>, el resultado con su error, y abajo los <b>ajustes del automático</b> y la <b>calibración</b>. Dentro de cada medida también sale un recuadro en vivo si abriste la app desde el equipo o marcaste "Estoy usando el equipo digital".</p>
    <p><b>Antes de empezar:</b></p>
    <ol><li>Clava A, B, M y N (capítulo <i>2 de 4</i>). Conecta todo con <b>S4 en 0, S2 en 0 y el inversor apagado</b>.</li>
-   <li>Enciende el inversor. Conecta el celular al Wi‑Fi <b>SEV-Campo</b>. Android avisa "sin internet": elige <b>Mantener conexión</b>. Si la página no abre, apaga los datos móviles.</li>
-   <li>Abre <b>http://192.168.4.1</b> en Chrome (escribe el <b>http://</b> completo). Debe decir <b>"transmisor conectado"</b>.</li>
-   <li>Escribe el <b>nombre del SEV</b> (y la línea y posición X si es un perfil con varios SEV). Si es un sondeo nuevo, toca <b>"Borrar todas las medidas (sondeo nuevo)"</b>.</li></ol>
+   <li>Enciende el inversor y los módulos. Espera unos 20 segundos. Conecta el celular al Wi‑Fi y abre <b>192.168.4.1</b>.</li>
+   <li>En <b>📡 Equipo digital</b> debe decir <b>"enlace con el transmisor"</b> en verde.</li>
+   <li>Crea o abre el sondeo y toca <b>Seguir midiendo</b>.</li></ol>
    <p><b>Por cada medida:</b></p>
-   <ol><li><b>Coloca los electrodos</b> donde dice el recuadro azul de la página: A y B a esa distancia del centro, uno a cada lado; M y N a la suya. Siempre desde la estaca del centro. La página calcula K sola.</li>
-   <li>Mira el <b>potencial natural</b> con S1 suelto. Si cambia mucho, espera a que se estabilice. Si también vas a leer con el multímetro, ponlo en cero con el compensador (gira P1 hasta 0,00).</li>
+   <ol><li><b>Coloca los electrodos</b> a la AB/2 y al MN que dice la app. Siempre desde la estaca del centro.</li>
+   <li>Mira el <b>potencial natural</b> con S1 suelto. Con varillas de acero, llévalo a 0,00 con el compensador (P1). Espera a que se estabilice.</li>
    <li>Pon <b>S4</b> en 50 V. Si el ΔV del pulso sale menor de 1 a 2 mV, con S1 suelto sube S4 una toma. <b>Avisa: "¡va corriente!"</b></li>
-   <li><b>Modo automático</b> (selector MAN/AUTO en <b>AUTO</b> y S6 en 1): aprieta <b>S1 y no lo sueltes</b>. El equipo da el pulso positivo (+), espera, cambia solo la polaridad y da el pulso negativo (−). <b>Suelta S1 cuando el recuadro "Cambio de polaridad" diga "listo".</b> Si sueltas antes, todo se apaga y la página dice "detenido". Los ajustes normales son pulso de 3 s, pausa de 2 s y 1 ciclo; en suelo difícil, 2 ciclos.</li>
+   <li><b>Modo automático</b> (selector MAN/AUTO en <b>AUTO</b> y S6 en 1): aprieta <b>S1 y no lo sueltes</b>. El equipo da el pulso positivo (+), espera, cambia solo la polaridad y da el pulso negativo (−), y repite hasta que el error baje del objetivo. Mira la pantalla: <b>suelta S1 cuando salga el aviso verde "LISTO: SUELTA S1"</b>. Si sueltas antes, todo se apaga y sale "DETENIDO": esa medida no cuenta, empieza de nuevo.</li>
    <li><b>Modo manual</b> (si falla el automático): selector en MAN. Con S6 en 1 usas el interruptor <b>S7</b>; si se dañó un contactor, pon S6 en 2 y usa el <b>S2 de levas</b>. Posición 1: aprieta S1 unos 3 s y suelta (pulso +). Posición 2: aprieta otros 3 s y suelta (pulso −). <b>Mueve S2, S6 y S7 solo con S1 suelto.</b></li>
-   <li><b>Revisa el resultado</b>: sale la ρa en el recuadro verde, promediando las dos polaridades. Si hay un aviso (polaridades distintas, lectura inestable), corrige y repite.</li>
-   <li>Toca <b>"Guardar y siguiente ▶"</b>. La medida queda guardada en el celular y el plan te dice qué mover para la siguiente.</li>
-   <li><b>Empalme</b>: se repite la misma AB/2 con un MN más grande. A y B no se mueven; solo M y N.</li>
+   <li><b>Lleva la lectura al sondeo:</b> toca <b>"Leer del equipo digital"</b>. La app llena I, ΔV 1, ΔV 2 y SP, guarda el <b>error de la medida</b> y lo marca en verde, amarillo o rojo. Si el error pasa de 5 %, da otro par de pulsos o revisa M y N.</li>
+   <li>Toca <b>Siguiente</b>. <b>Empalme</b>: se repite la misma AB/2 con un MN más grande; A y B no se mueven.</li>
    <li>Antes de que alguien mueva A o B: <b>S2 en 0 y S3 (descarga)</b>.</li></ol>
    <p><b>Al terminar:</b> S4 en 0, S2 en 0, apaga el inversor y aprieta S3 hasta que V1 marque 0.</p>
-   <p><b>Pasar las medidas a SEV Campo:</b></p>
-   <ul><li><b>Opción 1, directo, medida por medida (la recomendada):</b> con el celular en la red SEV-Campo, abre <b>http://192.168.4.1/app</b>. Es la app SEV Campo completa, guardada dentro del Módulo 2 (también está el enlace "Abrir app SEV Campo" arriba en la página del equipo). Abre la medida, aprieta S1 (con S2 en 1 y luego en 2, o en automático) y toca <b>"Leer del equipo digital"</b>: la app llena I, ΔV 1, ΔV 2 y SP, y te avisa si algo salió mal. Toca <b>Siguiente</b> y repite.</li>
-   <li><b>Opción 2, todas al final:</b> en la página del equipo, en "Medidas guardadas", toca <b>"Copiar para SEV Campo"</b> (o <b>Descargar .txt</b>). Luego, en esta app, toca <b>Importar</b> y pega el texto o elige el archivo. Los datos entran como AB/2, MN y R (ΔV ÷ I); la app calcula ρa, la curva y las capas.</li>
-   <li><b>Ojo:</b> la app abierta desde 192.168.4.1/app guarda sus sondeos <b>aparte</b> de la que usas en el computador o en internet. Para juntarlos, usa <b>Respaldo</b> en una e <b>Importar</b> en la otra. Además, la versión de internet (https) <b>no puede leer el equipo</b> directamente; por eso se usa la app del módulo o la opción 2.</li></ul>
-   <p><b>Calibración (una sola vez, y de nuevo si cambias alguna resistencia):</b> en la página del equipo, <b>"Calibrar con un multímetro"</b>. Mide con el multímetro 2 un voltaje fijo entre M y N, escribe el valor en "ΔV real" y toca <b>Calibrar ΔV</b>. Haz lo mismo con la corriente: multímetro 1 sobre la resistencia, escribe el valor en "Corriente real" y toca <b>Calibrar corriente</b>. Los factores normales están entre 0,9 y 1,1.</p>
-   <p><b>Si algo falla:</b> "sin señal del transmisor" → revisa el cargador del Módulo 1 y que los dos programas tengan el mismo canal Wi‑Fi. "Sin conexión con el módulo" → el celular se salió de la red SEV-Campo o pasó a datos móviles. La página no abre → escribe el http:// completo y revisa que el Módulo 2 tenga encendido el LED de la placa. Corriente negativa → intercambia los cables de la resistencia en el Módulo 1. "ΔV fuera de rango" → baja S4 o acerca M y N.</p>
-   <p><b>Seguridad:</b> lee el capítulo 12 y las reglas del capítulo anterior.</p>${IR('importar','Abrir Importar')}`),
+   <p><b>Ajustes del automático</b> (en 📡 Equipo digital, quedan guardados en el equipo): pulso 3 s, pausa 2 s, hasta 4 ciclos y error objetivo 2 %. Hay dos preajustes: <b>varillas de acero</b> (pausa 3 s, hasta 6 ciclos, error objetivo 3 %) e <b>impolarizables</b>. El equipo hace mínimo 2 ciclos y para solo cuando el error baja del objetivo.</p>
+   <p><b>Convertidor fino (ADS1220):</b> si el equipo lo lleva, el programa lo reconoce solo. Con él la página solo avisa "señal muy baja" por debajo de 0,05 mV, así que puedes abrir más AB/2 antes de ampliar MN. Si sale <b>"saturado"</b> en una AB/2 muy corta, baja el voltaje con S4.</p>
+   <p><b>Cambiar el voltaje a mitad de un sondeo:</b> cambia S4 <b>solo entre puntos</b>, con S1 suelto y sin corriente. Repite el último punto con el voltaje nuevo: debe dar casi igual (menos de 5 %). Anota desde qué punto cambiaste. Tope: 500 V.</p>
+   <p><b>Calibración</b> (una sola vez, y de nuevo si cambias alguna resistencia o el convertidor): en 📡 Equipo digital, sección Calibración. Escribe lo que marca el multímetro 2 (ΔV) o el multímetro 1 (corriente) y toca el botón. Los factores normales están entre 0,9 y 1,1.</p>
+   <p><b>Dónde queda cada dato:</b> los sondeos se guardan en el navegador del aparato donde abriste la app (en la app del equipo, aparte de la app de internet). Para juntarlos usa <b>Respaldo</b> en una e <b>Importar</b> en la otra. Los pulsos recientes quedan en la memoria del equipo (hasta 20) y se pierden si lo apagas; "Leer del equipo digital" los limpia después de leerlos. Si falla la app, queda la <b>página vieja del equipo</b> en <b>http://192.168.4.1/equipo</b>.</p>
+   <p><b>Si algo falla:</b> "sin señal del transmisor" → revisa el cargador del Módulo 1 y que los dos programas tengan el mismo canal Wi‑Fi. "Sin conexión con el equipo" → el celular se salió de la red SEV-Campo o pasó a datos móviles. La página no abre → escribe el http:// completo y revisa el LED del Módulo 2. Corriente negativa → intercambia los cables de la resistencia en el Módulo 1. "ΔV fuera de rango" → baja S4 o acerca M y N.</p>
+   <p><b>Seguridad:</b> no hay botón de inicio en el celular a propósito: la corriente la manda S1 con tu mano. Lee el capítulo 12.</p>`),
   CAP('que','1. Qué es SEV Campo y dónde se guarda todo',`<p>SEV Campo es la libreta digital del <b>Sondeo Eléctrico Vertical (SEV)</b>: anotas las lecturas en el campo, ves la curva, calculas las capas del subsuelo y sacas el informe en PDF.</p>
    <ul><li><b>Funciona sin internet.</b> Es un solo archivo que se abre con Chrome, en el celular o en el computador.</li>
    <li><b>Todo se guarda solo en este aparato</b>, en el navegador. Si borras los datos de Chrome o cambias de celular, se pierde.</li>
@@ -1189,7 +1273,7 @@ function vGuia(){
    <li>Toca <b>Automático</b>: la app prueba modelos de 2 a 5 capas y escoge el que mejor explica la curva sin complicarse.</li>
    <li>Mira el <b>Error de ajuste (RMS)</b>:<ul><li><b>Menos de 5 %</b>: bueno.</li><li><b>5 a 10 %</b>: aceptable; revisa puntos sueltos.</li><li><b>Más de 10 %</b>: algo no cuadra (puntos malos, cambios laterales, lomas cerca).</li></ul></li>
    <li>Puedes cambiar a mano la resistividad (ρ) o el espesor (h) de una capa y tocar <b>Ajustar</b>. <b>Fijar</b> deja un valor quieto (por ejemplo, si un pozo te dice la profundidad). <b>Dividir</b> y <b>Unir</b> agregan o quitan capas. <b>Deshacer</b> y <b>Restaurar</b> vuelven atrás.</li>
-   <li><b>Equivalencia</b>: varios modelos pueden explicar la misma curva. El botón te muestra cuánto pueden variar las capas sin que cambie el ajuste. Las capas profundas son las menos seguras.</li>
+   <li><b>Error de la medida (%)</b>: qué tanto cambian entre sí los ciclos de una misma medida. Hasta 3 % es buena; más de 5 % es dudosa. Lo calcula el equipo y la app lo usa para dar menos peso a las dudosas.</li><li><b>Equivalencia</b>: varios modelos pueden explicar la misma curva. El botón te muestra cuánto pueden variar las capas sin que cambie el ajuste. Las capas profundas son las menos seguras.</li>
    <li><b>Resultado de IPI2Win</b> (opcional): si interpretaste en IPI2Win, copia aquí su modelo y compáralo.</li></ol>
    <p class="small"><b>Regla de oro:</b> no interpretes más hondo de lo que mediste. Como guía, se ve hasta un cuarto o un tercio del AB/2 más abierto.</p>`),
   CAP('mat','6. Qué material es cada capa',`<ul><li>Al tocar una capa, la app sugiere el material según la <b>tabla de materiales</b> (pestaña <b>Sitio</b>).</li>
@@ -1239,6 +1323,8 @@ function vGuia(){
    <li><b>Informe con varios sondeos</b>: cada sondeo lleva su lectura y su consejo; hay una <b>tabla comparativa</b> y la recomendación final nombra el <b>sondeo recomendado</b> con su razón (capa con agua más gruesa y mejor ajuste). Es un criterio de la app, no una orden.</li>
    <li><b>Altitud automática</b>: en los datos del sondeo, con coordenadas e internet, toca <b>Traer altitud con las coordenadas</b>. Es aproximada (modelo de terreno de unos 30 m); corrígela a mano si la mediste. Se envían las coordenadas a un servicio externo de elevación (Open-Meteo).</li>
    <li><b>Capítulos "Empieza aquí" (los cuatro primeros de la guía)</b>: qué es un SEV, las formas de medir, cómo armar el tendido Schlumberger y semi-Schlumberger, cómo medir a mano con libreta y multímetros y cómo medir con el equipo digital (manual y automático).</li>
+   <li><b>Equipo digital en una sola pantalla</b>: al conectar el celular al Wi‑Fi SEV-Campo y abrir 192.168.4.1 se abre esta app. En <b>📡 Equipo digital</b> ves el equipo en vivo (enlace, ΔV, corriente, fase y el aviso "LISTO: SUELTA S1"), cambias los ajustes del automático y calibras, sin saltar a otra página. La página vieja del equipo sigue en 192.168.4.1/equipo.</li>
+   <li><b>Calidad de cada medida</b>: si el equipo (o tú) da el error de la medida, la lista de medidas la marca en verde, amarillo o rojo, la curva dibuja barras de error, el cálculo de capas da menos peso a las dudosas y el informe PDF trae un resumen. Sin ese dato, en modo I y ΔV se estima con la diferencia entre las dos polaridades.</li>
    <li><b>Terreno a lo largo del sondeo</b>: en la pestaña <b>Medidas</b>, debajo de la lista, aparece un dibujo del terreno entre A y B con los cambios de altura que anotaste, el desnivel y la pendiente. También sale en el PDF del sondeo.</li>
    <li><b>Altura de los electrodos A y B</b>: en cada medida, abre <b>¿Cuánto subió o bajó A y B?</b> y escribe el cambio desde la medida anterior (+ sube, − baja; el botón +/− cambia el signo). La app suma medida tras medida, muestra cuánto llevan A y B respecto al centro y calcula K con la distancia real. M y N se toman a la altura del centro. Mide AB/2 sobre el terreno, con la cinta. También puedes escribir la altitud (m s.n.m.) si prefieres.</li>
    <li><b>Logo más grande</b> en la portada del informe.</li>
@@ -2041,9 +2127,9 @@ function csvExcel(s){
   const n=v=>v==null||v===''?'':String(v).replace('.',',');
   const q=t=>'"'+String(t??'').replace(/"/g,'""')+'"';
   const lect=s.modo==='r'?['R (ohm)']:s.modo==='iv'?['I (mA)','DV1 (mV)','DV2 (mV)','SP (mV)']:[];
-  const head=['Medida','AB/2 (m)','MN (m)',...lect,'K (m)','rho a (ohm.m)','Nota'];
+  const head=['Medida','AB/2 (m)','MN (m)',...lect,'K (m)','rho a (ohm.m)','Error (%)','Nota'];
   const rows=s.filas.map((f,i)=>{const k=Ks(s,f),p=rho(s,f);
-    return [i+1,n(f.ab),n(f.mn),...(s.modo==='r'?[n(f.r)]:s.modo==='iv'?[n(f.i),n(f.dv1),n(f.dv2),n(f.sp)]:[]),k==null?'':n(k.toFixed(3)),p==null?'':n(p.toFixed(2)),q((f.off?'[SIN USAR] ':'')+(f.nota||''))].join(';')});
+    return [i+1,n(f.ab),n(f.mn),...(s.modo==='r'?[n(f.r)]:s.modo==='iv'?[n(f.i),n(f.dv1),n(f.dv2),n(f.sp)]:[]),k==null?'':n(k.toFixed(3)),p==null?'':n(p.toFixed(2)),(()=>{const e=errMed(s,f);return e?n(e.v.toFixed(1)):''})(),q((f.off?'[SIN USAR] ':'')+(f.nota||''))].join(';')});
   const out=[`Sondeo;${q(s.nombre)}`,`Lugar;${q(s.lugar)}`,`Fecha;${q(s.fecha)}`,`Altitud;${n(s.alt)}`,`Posicion X;${n(s.x)}`,`Linea;${q(s.linea||'')}`,`Arreglo;${esSemi(s)?'Semi-Schlumberger':'Schlumberger'}`,...(tieneXY(s)?[`Latitud;${(+s.lat).toFixed(6)}`,`Longitud;${(+s.lon).toFixed(6)}`]:[]),...(esSemi(s)?[`Distancia B;${n(s.distB)}`]:[]),`Departamento;${q(s.depto||'')}`,`Municipio;${q(s.municipio||'')}`,`Tabla de materiales;${q(zonaDe(s).nombre)}`,`Notas;${q(s.notas)}`,'',head.join(';'),...rows];
   const M=s.modelo,d=datosInv(s);
   if(M&&d.length){const zs=espesores(M);out.push('',`Modelo de capas;RMS (%);${n(SEV.rms(d.map(x=>x.rho),SEV.forward(d,M)).toFixed(2))}`,'Capa;rho (ohm.m);h (m);d (m);Alt (m)');
@@ -2131,7 +2217,7 @@ const hayDatosPropios=()=>S.sondeos.some(s=>!s.ejemplo&&!s.demo&&!/San Fernando/
 function pendienteRespaldo(){const r=respInfo();return r.cambios&&hayDatosPropios()&&(!r.f||r.horas>=6)}
 function bannerRespaldo(){if(!pendienteRespaldo())return '';const r=respInfo();
   return `<div class="note warn" style="display:flex;flex-direction:column;gap:8px"><b>💾 Respaldo pendiente</b><span>Hay cambios sin respaldar (${respTexto(r)}). Tus datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, se pierden. Haz el respaldo y mándatelo por correo, Drive o WhatsApp.</span><button class="btn primary" data-a="respaldo">Respaldar ahora</button></div>`}
-const APP_VER='v20';
+const APP_VER='v22';
 function lineaRespaldo(){const r=respInfo();return `<div class="small muted">💾 ${respTexto(r).replace(/^./,c=>c.toUpperCase())}${r.cambios&&r.f?' · hay cambios nuevos':''}. · Versión de la app: ${APP_VER}</div>`}
 
 /* ---------- PDF propio (sin internet ni librerías) ---------- */
@@ -2264,6 +2350,7 @@ async function informePDF(s,prog=()=>{},opt={}){
   /* ---------- método ---------- */
   const metodo=titulo=>{if(titulo)seccion(titulo);
   for(const t of [
+    (()=>{const e=(typeof s==='object'&&s&&s.elec)||'acero';return e==='impol'?'Electrodos de potencial: impolarizables (cobre y sulfato de cobre), que casi no generan voltaje propio. Además se invirtió la polaridad de la corriente y se promediaron los dos sentidos, lo que cancela el potencial natural del suelo.':'Electrodos de potencial: varillas de acero. Generan un voltaje propio que puede variar, por eso se midió el potencial natural entre pulsos, se invirtió la polaridad de la corriente y se promediaron los dos sentidos, lo que lo cancela. Las medidas con mayor dispersión se marcaron y pesaron menos en el cálculo.'})(),
     'Arreglo Schlumberger: corriente por A y B, potencial entre M y N, simétricos respecto al centro. Se aumenta AB/2 en progresión geométrica para investigar más profundo; MN se amplía con empalmes cuando el voltaje se vuelve pequeño.',
     'Curva teórica (modelo directo): solución 1D para capas horizontales mediante la transformada de Hankel de la función de resistividad (recurrencia de Pekeris), con MN finito. La parte de las dos primeras capas se calcula de forma exacta por el método de imágenes. Verificada contra soluciones exactas (diferencias menores de 0,2 %).',
     'Inversión: método de Newton amortiguado (Levenberg-Marquardt) sobre el logaritmo de resistividades y espesores, con una regularización de Tikhonov débil, siguiendo el esquema de IPI2Win (Bobachev, Modin y Shevnin, Universidad Estatal de Moscú). El modo automático busca el menor número de capas que ajuste los datos.',
@@ -2388,6 +2475,9 @@ async function informePDF(s,prog=()=>{},opt={}){
     P.text(XX(T0.pts[0].x)+4,YY(T0.pts[0].z)-6,'A',9,{bold:true});P.text(XX(T0.pts[T0.pts.length-1].x)-4,YY(T0.pts[T0.pts.length-1].z)-6,'B',9,{bold:true,align:'right'});P.text(XX(0),YY(0)-6,'Centro',8,{align:'center',color:GRIS});
     for(const v of [-T0.Lmax,0,T0.Lmax])P.text(XX(v),top+h0+11,fmtg(+Math.abs(v).toPrecision(3)),8,{align:'center',color:GRIS});
     P.text(x0+w0/2,top+h0+23,'Distancia al centro, AB/2 (m)',8.5,{align:'center',color:GRIS});y=top+h0+30}}
+  {const q=resumenCal(s);if(q){seccion('Calidad de las medidas');
+    parrafo(`De ${q.n} medidas con dato de calidad: ${q.c[0]} buenas (error hasta 3 %), ${q.c[1]} aceptables (hasta 5 %) y ${q.c[2]} dudosas (más de 5 %). El error lo calcula el equipo al promediar varios ciclos de pulsos; si no lo trae, se estima con la diferencia entre las dos polaridades. Las medidas dudosas pesaron menos al calcular las capas.`,{sz:8.5,color:GRIS});
+    const du=s.filas.filter(f=>!f.off&&nivelCal(s,f)===2);if(du.length)parrafo('Medidas dudosas (AB/2 en m): '+du.map(f=>fmtg(f.ab)+' (±'+fmt(errMed(s,f).v,1)+' %)').join(', ')+'.',{sz:8.5,vineta:true})}}
   if(M){seccion('Interpretación preliminar');const z=espesores(M);
     M.rho.forEach((r,i)=>parrafo(`Capa ${i+1} (${i<z.length?`de ${fmt(i?z[i-1]:0,2)} a ${fmt(z[i],2)} m`:`desde ${fmt(z[i-1],2)} m hacia abajo`}): ${fmt(r,1)} Ohm·m. Posible ${materialDe(s,r).toLowerCase()}.`,{vineta:true,extra:1}));
     if(M.rho.length>2){const N=M.rho.length,Sx=M.h.map((h,i)=>({i,S:h/M.rho[i],T:h*M.rho[i]})),c=Sx.reduce((a,b)=>b.S>a.S?b:a),r=Sx.reduce((a,b)=>b.T>a.T?b:a);
@@ -2658,9 +2748,10 @@ function copiarTexto(txt,ta){const done=()=>toast('Copiado. Pégalo en el Bloc d
   else if(ta){ta.select();try{document.execCommand('copy');done()}catch(_){toast('Selecciona y copia el texto')}}}
 
 function render(){
-  const html={lista:vLista,editar:vEditar,sondeo:vSondeo,medida:vMedida,importar:vImportar,perfil:vPerfil,zonas:vZonas,calib:vCalib,guia:vGuia,estudio:vEstudio,pasos:vPasos}[V.view]();$('#app').innerHTML=html;
+  const html={lista:vLista,editar:vEditar,sondeo:vSondeo,medida:vMedida,importar:vImportar,perfil:vPerfil,zonas:vZonas,calib:vCalib,guia:vGuia,estudio:vEstudio,pasos:vPasos,equipo:vEquipo}[V.view]();$('#app').innerHTML=html;
   if(V.view==='medida'){actualizarRes();const s=cur(),first=s.modo==='r'?$('#inR'):s.modo==='rho'?$('#inRHO'):$('#inI');if(first&&!first.value)first.focus({preventScroll:true})}
-  if(V.view==='sondeo'&&V.tab==='capas'&&cur()&&cur().modelo&&!RESTORE[V.sid])RESTORE[V.sid]=clone(cur().modelo)}
+  if(V.view==='sondeo'&&V.tab==='capas'&&cur()&&cur().modelo&&!RESTORE[V.sid])RESTORE[V.sid]=clone(cur().modelo);
+  eqIniciar()}
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{
@@ -2689,6 +2780,15 @@ document.addEventListener('click',e=>{
     case 'agregar':{const u=s.filas[s.filas.length-1];s.filas.push(fila({ab:u?+(num(u.ab)*1.5).toPrecision(2):1,mn:u?num(u.mn):0.5}));save();go({view:'medida',idx:s.filas.length-1});break}
     case 'prev':saveNow();go({idx:Math.max(0,V.idx-1)});break;
     case 'leerEquipo':leerEquipo();break;
+    case 'equipo':go({view:'equipo'});break;
+    case 'eqLimpiar':eqGet('/api/limpiar').then(()=>{toast('Pulsos borrados en el equipo');eqPoll()}).catch(()=>toast('No encuentro el equipo'));break;
+    case 'eqGuardar':{const q=id=>encodeURIComponent((document.getElementById(id).value||'').replace(',','.'));
+      eqGet('/api/auto?tp='+q('eqTp')+'&pa='+q('eqPa')+'&nc='+q('eqNc')+'&obj='+q('eqObj')).then(r=>{toast(r.ok?'Ajustes guardados en el equipo':'El equipo no aceptó los ajustes');eqPoll()}).catch(()=>toast('No encuentro el equipo'));break}
+    case 'eqPreset':{const p=t.dataset.p==='acero'?[3,3,6,3]:[3,2,4,2];[['eqTp',p[0]],['eqPa',p[1]],['eqNc',p[2]],['eqObj',p[3]]].forEach(([id,v])=>{document.getElementById(id).value=v});toast('Preajuste puesto. Toca Guardar ajustes.');break}
+    case 'eqCal':{const tp=t.dataset.t,val=tp==='borrar'?'':(document.getElementById(tp==='v'?'eqKv':'eqKi').value||'').replace(',','.');
+      if(tp!=='borrar'&&!(parseFloat(val)>0||parseFloat(val)<0)){toast('Escribe primero el valor del multímetro.');break}
+      const hacer=()=>eqGet(tp==='borrar'?'/api/cal?t=borrar':'/api/cal?t='+tp+'&real='+encodeURIComponent(val)).then(r=>{closeModal();toast(r.ok?(tp==='borrar'?'Calibración quitada':'Calibración guardada en el equipo'):(r.tx||'No se pudo calibrar'));eqPoll()}).catch(()=>toast('No encuentro el equipo'));
+      if(tp==='borrar')confirmar('¿Quitar la calibración del equipo?','Quitar',hacer);else hacer();break}
     case 'next':saveNow();if(V.idx<s.filas.length-1)go({idx:V.idx+1});else{go({view:'sondeo',tab:'curva'});toast('Medidas completas. Esta es tu curva.');if(pendienteRespaldo())confirmar('Terminaste las medidas de este sondeo. ¿Hacer un respaldo ahora? Así no pierdes el trabajo.','Respaldar',()=>{closeModal();respaldo()})}break;
     case 'borrarMedida':confirmar(`¿Borrar la medida ${V.idx+1} (AB/2 ${fmtg(s.filas[V.idx].ab)} m)?`,'Borrar',()=>{s.filas.splice(V.idx,1);saveNow();go({view:'sondeo',tab:'medidas'})});break;
     case 'borrarSondeo':confirmar(`¿Borrar el sondeo "${s.nombre}" con todas sus medidas? No se puede deshacer.`,'Borrar sondeo',()=>{S.sondeos=S.sondeos.filter(x=>x.id!==s.id);saveNow();go({view:'lista',sid:null,volverLista:false});toast('Sondeo borrado')});break;
@@ -2723,10 +2823,11 @@ document.addEventListener('click',e=>{
   }});
 document.addEventListener('input',e=>{
   if(V.view!=='medida')return;const f=cur().filas[V.idx],id=e.target.id,v=e.target.value.trim();
-  const map={inAB:'ab',inMN:'mn',inHA:'hA',inHB:'hB',inDA:'dA',inDB:'dB',inI:'i',inD1:'dv1',inD2:'dv2',inSP:'sp',inR:'r',inRHO:'rhoa',inNota:'nota'};if(!map[id])return;
+  const map={inAB:'ab',inMN:'mn',inHA:'hA',inHB:'hB',inDA:'dA',inDB:'dB',inI:'i',inD1:'dv1',inD2:'dv2',inSP:'sp',inR:'r',inRHO:'rhoa',inNota:'nota',inErr:'err'};if(!map[id])return;
   f[map[id]]=id==='inNota'?v:(v===''?null:num(v));save();actualizarRes()});
 document.addEventListener('change',e=>{
   const t=e.target;
+  if(t.id==='eqUsar'){S.opciones.equipo=t.checked;saveNow();return}
   if(t.id==='impFile'&&t.files&&t.files[0]){const file=t.files[0],rd=new FileReader();
     if(/\.zip$/i.test(file.name)||file.type==='application/zip'){rd.onload=()=>{leerZip(rd.result).then(tx=>{V.imp=leerImport(tx,file.name.replace(/\.zip$/i,'.json'));render()}).catch(()=>toast('No pude abrir ese .zip. Usa un respaldo hecho por esta app.'))};rd.onerror=()=>toast('No se pudo leer el archivo');rd.readAsArrayBuffer(file);return}
     rd.onload=()=>{V.imp=leerImport(String(rd.result),file.name);render()};rd.onerror=()=>toast('No se pudo leer el archivo');rd.readAsText(file);return}

@@ -1082,6 +1082,86 @@ const CAP=(id,titulo,html)=>`<details class="ayuda guia" id="g-${id}"${V.gcap===
 const IR=(a,txt,extra='')=>`<button class="btn sm" style="margin:4px 0" data-a="${a}" ${extra}>${txt}</button>`;
 function vGuia(){
   const c=[
+  CAP('ini','★ Empieza aquí (1 de 4): ¿qué se hace y cómo vas a medir?',`<p>Un <b>SEV (sondeo eléctrico vertical)</b> averigua cómo cambia el terreno hacia abajo. Se manda corriente al suelo por dos electrodos (<b>A</b> y <b>B</b>) y se mide el voltaje que aparece entre otros dos (<b>M</b> y <b>N</b>). Cuanto más separas A y B, más profundo llega la corriente. Con cada medida sale una resistividad aparente (ρa); al juntar todas se dibuja una curva y la app calcula las capas.</p>
+   <p><b>Hay cuatro formas de tomar las lecturas.</b> Escoge una:</p>
+   <ol><li><b>A mano, con libreta y multímetros</b>: el equipo casero da el pulso y tú lees dos multímetros (corriente I y voltaje ΔV), los anotas en la libreta y luego los pasas a la app. No necesita celular en el campo. Ver el capítulo <i>Empieza aquí (3 de 4)</i>.</li>
+   <li><b>Equipo digital, polaridad manual</b>: el equipo mide solo y la página del celular guarda las lecturas, pero tú cambias la polaridad con el interruptor S7 (o S2). Ver el capítulo <i>(4 de 4)</i>.</li>
+   <li><b>Equipo digital, automático</b>: aprietas S1 y no lo sueltas; el equipo da el pulso positivo, espera, cambia solo la polaridad y da el pulso negativo. Ver el capítulo <i>(4 de 4)</i>.</li>
+   <li><b>Equipo comercial o datos ya hechos</b>: si el equipo da R directamente, o copias ρa de un informe, al crear el sondeo escoge esa opción (capítulo 2).</li></ol>
+   <p><b>Y el arreglo de los electrodos</b>: casi siempre <b>Schlumberger</b>; si no hay espacio para abrir los dos lados, <b>semi-Schlumberger</b>. Se explican en el capítulo <i>(2 de 4)</i>.</p>
+   <p><b>El orden de un día de trabajo:</b></p>
+   <ol><li>Crear el sondeo en la app (capítulo 2).</li><li>Armar el tendido en el terreno (capítulo <i>2 de 4</i>).</li><li>Medir, de la distancia más corta a la más larga (capítulos <i>3 y 4 de 4</i>).</li><li>Revisar la curva y calcular las capas (capítulos 4 y 5).</li><li>Sacar el informe y hacer el respaldo (capítulo 9).</li></ol>${IR('nuevo','Crear un sondeo')}`),
+  CAP('tend','★ Empieza aquí (2 de 4): armar el tendido (Schlumberger y semi-Schlumberger)',`<p><b>Qué llevar:</b> 4 electrodos (varillas) y cables, cinta métrica o decámetro largo (150 m si vas a llegar lejos), una estaca para el centro, martillo, agua con sal para mojar las varillas, el equipo, la libreta y un lápiz.</p>
+   <p><b>Schlumberger (lo normal: se abre hacia los dos lados)</b></p>
+   <ol><li>Elige el punto del sondeo y clava una <b>estaca en el centro</b>. Todas las distancias se miden <b>desde esa estaca</b>.</li>
+   <li>Tiende la cinta en <b>línea recta</b> hacia los dos lados del centro, lo más plana posible y lejos de cercas, tubos y cables.</li>
+   <li><b>A y B (corriente)</b>: uno a cada lado del centro, a la misma distancia <b>AB/2</b>. Ejemplo: si la app dice AB/2 = 10 m, clavas A a 10 m hacia un lado y B a 10 m hacia el otro (entre A y B hay 20 m).</li>
+   <li><b>M y N (voltaje)</b>: también uno a cada lado del centro, bien juntos. Si la app dice MN = 0,5 m, pones M y N a 0,25 m del centro cada uno. Siempre simétricos.</li>
+   <li>Mide con la cinta <b>sobre el terreno</b>, en línea recta. Moja la tierra de cada varilla para que haga buen contacto.</li>
+   <li>Después de cada medida, <b>aleja A y B</b> a la siguiente AB/2 que indica la app. M y N no se mueven mientras la señal sea buena.</li>
+   <li>Cuando A y B ya están lejos y la señal se pone muy baja, <b>amplía MN</b> (por ejemplo de 0,5 a 2 m, luego 5 y 10 m). En ese cambio se hace un <b>empalme</b>: se repite la misma AB/2 con el MN nuevo. <b>A y B no se mueven, solo M y N.</b> Las dos ρa deben salir parecidas.</li>
+   <li>Regla práctica: MN no debe pasar de 4/10 de AB/2 (la app te avisa).</li>
+   <li>La plantilla <b>"De 1 a 150 m, con empalmes"</b> ya trae esa secuencia: AB/2 de 1, 1,5, 2, 3, 4, 5 y 7 m con MN 0,5; luego 7, 10, 15, 20 y 30 m con MN 2; 30, 40, 50 y 70 m con MN 5; y 70, 100 y 150 m con MN 10.</li>
+   <li>Aproximadamente, la profundidad que alcanzas es entre AB/2 ÷ 3 y AB/2 ÷ 2.</li></ol>
+   <p><b>Semi-Schlumberger (cuando no puedes abrir hacia un lado: una vía, un río, un lindero)</b></p>
+   <ol><li>Clava la estaca del <b>centro</b> como siempre. M y N quedan en el centro, juntos.</li>
+   <li><b>B se lleva muy lejos</b> hacia el lado donde sí hay espacio, a por lo menos 5 a 10 veces la AB/2 más grande que vayas a medir, y <b>se deja fijo</b>. Usa 2 o 3 varillas juntas y bien mojadas, porque B necesita muy buen contacto.</li>
+   <li>Solo se mueve <b>A</b>, siempre del mismo lado: a la distancia AB/2 que indica la app, medida desde la estaca del centro.</li>
+   <li>En la app, al crear el sondeo (o en <b>Editar</b>) escoge el arreglo <b>Semi-Schlumberger</b> y escribe la <b>distancia a B</b>. La app calcula <b>K el doble</b> y te avisa si B quedó muy cerca.</li>
+   <li>Los empalmes (ampliar MN) se hacen igual que en Schlumberger.</li></ol>
+   <p>Si el terreno no es plano, mira el recuadro <b>"¿Cuánto subió o bajó A y B?"</b> dentro de cada medida (capítulo 14).</p>`),
+  CAP('mano','★ Empieza aquí (3 de 4): medir a mano, con libreta y multímetros',`<p><b>Cómo es el equipo.</b> Todo va en una sola caja con tres zonas: 12/120 V, alto voltaje y medida. Los controles que usas:</p>
+   <ul><li><b>S4</b>: selector de voltaje de salida (50, 100, 200, 300, 400 y 500 V). Empieza siempre en el más bajo.</li>
+   <li><b>S1 (MEDIR)</b>: pulsador. Mientras lo aprietas sale corriente por A y B.</li>
+   <li><b>S2</b>: polaridad (posiciones 1, 0 y 2). En 0 no sale corriente.</li>
+   <li><b>S3</b>: descarga los condensadores. <b>V1</b> muestra el voltaje.</li>
+   <li><b>Multímetro 1</b>: mide la corriente sobre una resistencia de 1 Ω (<b>1 mV = 1 mA</b>). Está bajo una tapa de acrílico porque queda a alto voltaje: se lee sin tocarlo.</li>
+   <li><b>Multímetro 2</b>: está en la franja <b>MEDIDA MN</b> y marca ΔV entre M y N, en mV.</li>
+   <li><b>Compensador de SP</b> (franja MEDIDA MN): perilla <b>P1</b> de 10 vueltas, interruptor <b>S5</b> de polaridad y <b>ON/OFF</b>. Pone en cero el potencial natural del suelo para que el multímetro 2 lea limpio.</li></ul>
+   <p><b>Antes de empezar:</b> clava A, B, M y N (capítulo anterior) y conecta todo con <b>S4 en 0, S2 en 0 y el inversor apagado</b>. Después enciende el inversor.</p>
+   <p><b>Por cada medida:</b></p>
+   <ol><li>Coloca los electrodos a la <b>AB/2</b> y al <b>MN</b> que dice la app.</li>
+   <li>Con <b>S1 suelto</b> y el compensador en ON, gira <b>P1</b> hasta que el multímetro 2 marque <b>0,00 mV</b>. Si al girar el número sube, cambia S5. <b>Sin compensador</b>: anota el SP, es decir, lo que marca el multímetro 2 con S1 suelto.</li>
+   <li>Pon <b>S4</b> en 50 V. <b>Avisa en voz alta o por radio: "¡va corriente!"</b> para que nadie toque A ni B.</li>
+   <li><b>S2 en 1.</b> Aprieta <b>S1</b> unos 3 segundos y anota <b>ΔV 1</b>, con su signo (multímetro 2), y la corriente <b>I</b> (multímetro 1, en mA). Suelta S1 y revisa que el multímetro 2 vuelva a 0,00; si se corrió, retoca P1.</li>
+   <li>Si el ΔV es menor de 1 a 2 mV, con S1 suelto sube <b>S4 una toma</b> y repite.</li>
+   <li><b>S2 en 2</b> (polaridad invertida). Aprieta S1 otros 3 segundos y anota <b>ΔV 2</b>, con su signo. Debe salir casi igual a ΔV 1 y de signo contrario. Suelta S1 y revisa el cero.</li>
+   <li>Pon <b>S2 en 0</b> y aprieta <b>S3</b> (descarga) <b>antes de que alguien mueva A o B</b>.</li>
+   <li>En la app escribe <b>I, ΔV 1, ΔV 2</b> con su signo y el <b>SP</b>: 0 si usaste el compensador, o el valor que anotaste si no lo usaste. La app resta el SP sola.</li>
+   <li>Si ΔV 1 y ΔV 2 difieren más de 5 a 10 %, repite la medida: hay un electrodo flojo, ruido o el SP se movió.</li>
+   <li>Toca <b>Siguiente</b> y pasa a la siguiente distancia. Cuando cambia MN, mide el <b>empalme</b>.</li></ol>
+   <p><b>Por qué se invierte la polaridad.</b> Cancela el potencial natural aunque cambie: (ΔV 1 − ΔV 2) ÷ 2 deja solo la señal de la corriente. Por ejemplo, +13 y −7 mV con un SP de +3 mV dan 10 mV reales. También evita que las varillas se "carguen" si la corriente va siempre en el mismo sentido. El compensador <b>no reemplaza</b> la inversión: se usan los dos juntos.</p>
+   <p><b>Equipos con inversión automática:</b> si tu equipo tiene los contactores nuevos, la polaridad la cambia el equipo (capítulo siguiente). Con el selector en manual y S6 en 1 se usa el interruptor <b>S7</b>; con S6 en 2, el <b>S2 de levas</b>. Mueve S2, S6 y S7 <b>solo con S1 suelto</b>.</p>
+   <p><b>Si no llevas el celular al campo:</b> usa una libreta con columnas <b>N.º · AB/2 · MN · I (mA) · ΔV 1 (mV) · ΔV 2 (mV) · SP (mV) · nota</b>, y pasas los datos a la app en casa. Anota también lomas, rocas, agua o cercas cerca de cada electrodo. Quítales el apagado automático a los multímetros y lleva pilas de repuesto.</p>
+   <p><b>Seguridad:</b> nadie a menos de 2 m de A y B mientras S1 esté apretado; guantes dieléctricos clase 0; no medir con lluvia; S4 y S2 solo se giran con S1 suelto; no toques el multímetro 1 ni su acrílico mientras S1 esté apretado o los condensadores tengan carga.</p>
+   <p><b>Al terminar:</b> S4 en 0, S2 en 0, apaga el inversor y aprieta S3 hasta que V1 marque 0.</p>`),
+  CAP('auto','★ Empieza aquí (4 de 4): medir con el equipo digital (celular)',`<p><b>Cómo funciona.</b> El equipo tiene dos módulos con cerebro electrónico (ESP32):</p>
+   <ul><li><b>Módulo 1 (corriente)</b>: va dentro de la caja del transmisor, en la zona de alto voltaje. Mide la corriente sobre la resistencia de 1 Ω y el voltaje de salida, y los manda por radio al otro módulo.</li>
+   <li><b>Módulo 2 (voltaje y celular)</b>: va en la zona de medida. Mide ΔV entre M y N, recibe la corriente, calcula R = ΔV ÷ I y ρa, y crea una red Wi‑Fi llamada <b>SEV-Campo</b> (clave <b>sev12345</b>). Cada vez que aprietas S1 detecta el pulso, <b>resta solo el potencial natural</b> y <b>promedia el pulso normal con el invertido</b>.</li>
+   <li>Cada módulo tiene su propio cargador de celular. Entre los dos solo hay radio. <b>Con el transmisor encendido, el Módulo 1 queda a alto voltaje: no se toca.</b></li></ul>
+   <p><b>Antes de empezar:</b></p>
+   <ol><li>Clava A, B, M y N (capítulo <i>2 de 4</i>). Conecta todo con <b>S4 en 0, S2 en 0 y el inversor apagado</b>.</li>
+   <li>Enciende el inversor. Conecta el celular al Wi‑Fi <b>SEV-Campo</b>. Android avisa "sin internet": elige <b>Mantener conexión</b>. Si la página no abre, apaga los datos móviles.</li>
+   <li>Abre <b>http://192.168.4.1</b> en Chrome (escribe el <b>http://</b> completo). Debe decir <b>"transmisor conectado"</b>.</li>
+   <li>Escribe el <b>nombre del SEV</b> (y la línea y posición X si es un perfil con varios SEV). Si es un sondeo nuevo, toca <b>"Borrar todas las medidas (sondeo nuevo)"</b>.</li></ol>
+   <p><b>Por cada medida:</b></p>
+   <ol><li><b>Coloca los electrodos</b> donde dice el recuadro azul de la página: A y B a esa distancia del centro, uno a cada lado; M y N a la suya. Siempre desde la estaca del centro. La página calcula K sola.</li>
+   <li>Mira el <b>potencial natural</b> con S1 suelto. Si cambia mucho, espera a que se estabilice. Si también vas a leer con el multímetro, ponlo en cero con el compensador (gira P1 hasta 0,00).</li>
+   <li>Pon <b>S4</b> en 50 V. Si el ΔV del pulso sale menor de 1 a 2 mV, con S1 suelto sube S4 una toma. <b>Avisa: "¡va corriente!"</b></li>
+   <li><b>Modo automático</b> (selector MAN/AUTO en <b>AUTO</b> y S6 en 1): aprieta <b>S1 y no lo sueltes</b>. El equipo da el pulso positivo (+), espera, cambia solo la polaridad y da el pulso negativo (−). <b>Suelta S1 cuando el recuadro "Cambio de polaridad" diga "listo".</b> Si sueltas antes, todo se apaga y la página dice "detenido". Los ajustes normales son pulso de 3 s, pausa de 2 s y 1 ciclo; en suelo difícil, 2 ciclos.</li>
+   <li><b>Modo manual</b> (si falla el automático): selector en MAN. Con S6 en 1 usas el interruptor <b>S7</b>; si se dañó un contactor, pon S6 en 2 y usa el <b>S2 de levas</b>. Posición 1: aprieta S1 unos 3 s y suelta (pulso +). Posición 2: aprieta otros 3 s y suelta (pulso −). <b>Mueve S2, S6 y S7 solo con S1 suelto.</b></li>
+   <li><b>Revisa el resultado</b>: sale la ρa en el recuadro verde, promediando las dos polaridades. Si hay un aviso (polaridades distintas, lectura inestable), corrige y repite.</li>
+   <li>Toca <b>"Guardar y siguiente ▶"</b>. La medida queda guardada en el celular y el plan te dice qué mover para la siguiente.</li>
+   <li><b>Empalme</b>: se repite la misma AB/2 con un MN más grande. A y B no se mueven; solo M y N.</li>
+   <li>Antes de que alguien mueva A o B: <b>S2 en 0 y S3 (descarga)</b>.</li></ol>
+   <p><b>Al terminar:</b> S4 en 0, S2 en 0, apaga el inversor y aprieta S3 hasta que V1 marque 0.</p>
+   <p><b>Pasar las medidas a SEV Campo:</b></p>
+   <ul><li><b>Opción 1, directo, medida por medida (la recomendada):</b> con el celular en la red SEV-Campo, abre <b>http://192.168.4.1/app</b>. Es la app SEV Campo completa, guardada dentro del Módulo 2 (también está el enlace "Abrir app SEV Campo" arriba en la página del equipo). Abre la medida, aprieta S1 (con S2 en 1 y luego en 2, o en automático) y toca <b>"Leer del equipo digital"</b>: la app llena I, ΔV 1, ΔV 2 y SP, y te avisa si algo salió mal. Toca <b>Siguiente</b> y repite.</li>
+   <li><b>Opción 2, todas al final:</b> en la página del equipo, en "Medidas guardadas", toca <b>"Copiar para SEV Campo"</b> (o <b>Descargar .txt</b>). Luego, en esta app, toca <b>Importar</b> y pega el texto o elige el archivo. Los datos entran como AB/2, MN y R (ΔV ÷ I); la app calcula ρa, la curva y las capas.</li>
+   <li><b>Ojo:</b> la app abierta desde 192.168.4.1/app guarda sus sondeos <b>aparte</b> de la que usas en el computador o en internet. Para juntarlos, usa <b>Respaldo</b> en una e <b>Importar</b> en la otra. Además, la versión de internet (https) <b>no puede leer el equipo</b> directamente; por eso se usa la app del módulo o la opción 2.</li></ul>
+   <p><b>Calibración (una sola vez, y de nuevo si cambias alguna resistencia):</b> en la página del equipo, <b>"Calibrar con un multímetro"</b>. Mide con el multímetro 2 un voltaje fijo entre M y N, escribe el valor en "ΔV real" y toca <b>Calibrar ΔV</b>. Haz lo mismo con la corriente: multímetro 1 sobre la resistencia, escribe el valor en "Corriente real" y toca <b>Calibrar corriente</b>. Los factores normales están entre 0,9 y 1,1.</p>
+   <p><b>Si algo falla:</b> "sin señal del transmisor" → revisa el cargador del Módulo 1 y que los dos programas tengan el mismo canal Wi‑Fi. "Sin conexión con el módulo" → el celular se salió de la red SEV-Campo o pasó a datos móviles. La página no abre → escribe el http:// completo y revisa que el Módulo 2 tenga encendido el LED de la placa. Corriente negativa → intercambia los cables de la resistencia en el Módulo 1. "ΔV fuera de rango" → baja S4 o acerca M y N.</p>
+   <p><b>Seguridad:</b> lee el capítulo 12 y las reglas del capítulo anterior.</p>${IR('importar','Abrir Importar')}`),
   CAP('que','1. Qué es SEV Campo y dónde se guarda todo',`<p>SEV Campo es la libreta digital del <b>Sondeo Eléctrico Vertical (SEV)</b>: anotas las lecturas en el campo, ves la curva, calculas las capas del subsuelo y sacas el informe en PDF.</p>
    <ul><li><b>Funciona sin internet.</b> Es un solo archivo que se abre con Chrome, en el celular o en el computador.</li>
    <li><b>Todo se guarda solo en este aparato</b>, en el navegador. Si borras los datos de Chrome o cambias de celular, se pierde.</li>
@@ -1158,6 +1238,7 @@ function vGuia(){
    <li><b>Nombre del proyecto automático</b>: si no lo escribes tú, sale de los sondeos que marcaste en las casillas del informe. Si lo escribes, la app respeta tu texto (borra el texto para volver al automático).</li>
    <li><b>Informe con varios sondeos</b>: cada sondeo lleva su lectura y su consejo; hay una <b>tabla comparativa</b> y la recomendación final nombra el <b>sondeo recomendado</b> con su razón (capa con agua más gruesa y mejor ajuste). Es un criterio de la app, no una orden.</li>
    <li><b>Altitud automática</b>: en los datos del sondeo, con coordenadas e internet, toca <b>Traer altitud con las coordenadas</b>. Es aproximada (modelo de terreno de unos 30 m); corrígela a mano si la mediste. Se envían las coordenadas a un servicio externo de elevación (Open-Meteo).</li>
+   <li><b>Capítulos "Empieza aquí" (los cuatro primeros de la guía)</b>: qué es un SEV, las formas de medir, cómo armar el tendido Schlumberger y semi-Schlumberger, cómo medir a mano con libreta y multímetros y cómo medir con el equipo digital (manual y automático).</li>
    <li><b>Terreno a lo largo del sondeo</b>: en la pestaña <b>Medidas</b>, debajo de la lista, aparece un dibujo del terreno entre A y B con los cambios de altura que anotaste, el desnivel y la pendiente. También sale en el PDF del sondeo.</li>
    <li><b>Altura de los electrodos A y B</b>: en cada medida, abre <b>¿Cuánto subió o bajó A y B?</b> y escribe el cambio desde la medida anterior (+ sube, − baja; el botón +/− cambia el signo). La app suma medida tras medida, muestra cuánto llevan A y B respecto al centro y calcula K con la distancia real. M y N se toman a la altura del centro. Mide AB/2 sobre el terreno, con la cinta. También puedes escribir la altitud (m s.n.m.) si prefieres.</li>
    <li><b>Logo más grande</b> en la portada del informe.</li>
@@ -2050,7 +2131,7 @@ const hayDatosPropios=()=>S.sondeos.some(s=>!s.ejemplo&&!s.demo&&!/San Fernando/
 function pendienteRespaldo(){const r=respInfo();return r.cambios&&hayDatosPropios()&&(!r.f||r.horas>=6)}
 function bannerRespaldo(){if(!pendienteRespaldo())return '';const r=respInfo();
   return `<div class="note warn" style="display:flex;flex-direction:column;gap:8px"><b>💾 Respaldo pendiente</b><span>Hay cambios sin respaldar (${respTexto(r)}). Tus datos viven solo en este navegador: si borras los datos de Chrome o cambias de celular, se pierden. Haz el respaldo y mándatelo por correo, Drive o WhatsApp.</span><button class="btn primary" data-a="respaldo">Respaldar ahora</button></div>`}
-const APP_VER='v19';
+const APP_VER='v20';
 function lineaRespaldo(){const r=respInfo();return `<div class="small muted">💾 ${respTexto(r).replace(/^./,c=>c.toUpperCase())}${r.cambios&&r.f?' · hay cambios nuevos':''}. · Versión de la app: ${APP_VER}</div>`}
 
 /* ---------- PDF propio (sin internet ni librerías) ---------- */
